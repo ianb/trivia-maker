@@ -6,8 +6,37 @@ function TriviaMaker() {
   const [newQuestion, setNewQuestion] = useState("");
   const [newAnswer, setNewAnswer] = useState("");
   const [flippedCards, setFlippedCards] = useState(new Set());
+  const [openRouterToken, setOpenRouterToken] = useState("");
 
-  // Load cards from localStorage on mount
+  // Helper function to generate random string
+  function generateRandomString(length) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+
+  // Helper function to base64url encode
+  function base64UrlEncode(str) {
+    return btoa(str)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  }
+
+  // Helper function to create SHA-256 code challenge
+  async function createSHA256CodeChallenge(verifier) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(verifier);
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hash));
+    const hashString = String.fromCharCode.apply(null, hashArray);
+    return base64UrlEncode(hashString);
+  }
+
+  // Load cards and token from localStorage on mount, and handle OAuth callback
   useEffect(() => {
     const saved = localStorage.getItem("triviaCards");
     if (saved) {
@@ -17,7 +46,77 @@ function TriviaMaker() {
         console.error("Failed to load cards:", e);
       }
     }
+    const savedToken = localStorage.getItem("openRouterToken");
+    if (savedToken) {
+      setOpenRouterToken(savedToken);
+    }
+
+    // Handle OAuth callback
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    if (code) {
+      handleOAuthCallback(code);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
+
+  async function handleOAuthCallback(code) {
+    const codeVerifier = sessionStorage.getItem('openRouterCodeVerifier');
+    const codeChallengeMethod = sessionStorage.getItem('openRouterCodeChallengeMethod');
+
+    if (!codeVerifier) {
+      console.error('No code verifier found in session storage');
+      return;
+    }
+
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/auth/keys', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: code,
+          code_verifier: codeVerifier,
+          code_challenge_method: codeChallengeMethod || 'S256',
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Failed to exchange code: ${error}`);
+      }
+
+      const { key } = await response.json();
+      localStorage.setItem("openRouterToken", key);
+      setOpenRouterToken(key);
+
+      // Clean up session storage
+      sessionStorage.removeItem('openRouterCodeVerifier');
+      sessionStorage.removeItem('openRouterCodeChallengeMethod');
+    } catch (error) {
+      console.error('Error exchanging OAuth code:', error);
+      alert('Failed to connect to OpenRouter. Please try again.');
+    }
+  }
+
+  async function handleConnectOpenRouter() {
+    // Generate code verifier and challenge
+    const codeVerifier = generateRandomString(128);
+    const codeChallenge = await createSHA256CodeChallenge(codeVerifier);
+
+    // Store verifier in session storage for later use
+    sessionStorage.setItem('openRouterCodeVerifier', codeVerifier);
+    sessionStorage.setItem('openRouterCodeChallengeMethod', 'S256');
+
+    // Get current URL for callback
+    const callbackUrl = window.location.origin + window.location.pathname;
+
+    // Redirect to OpenRouter auth
+    const authUrl = `https://openrouter.ai/auth?callback_url=${encodeURIComponent(callbackUrl)}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+    window.location.href = authUrl;
+  }
 
   // Save cards to localStorage whenever they change
   useEffect(() => {
@@ -92,8 +191,58 @@ function TriviaMaker() {
     });
   }
 
+  function handleRemoveToken() {
+    localStorage.removeItem("openRouterToken");
+    setOpenRouterToken("");
+  }
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="container mx-auto px-4 py-8 max-w-6xl relative">
+      {/* OpenRouter Button - Top Right */}
+      <div className="absolute top-0 right-0">
+        {openRouterToken ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs pixel-font px-3 py-2" style={{
+              color: '#4CAF50',
+              background: '#E8F5E9',
+              border: '2px solid #2D5016',
+              boxShadow: '2px 2px 0px #1A3009'
+            }}>
+              ✓ CONNECTED
+            </span>
+            <button
+              onClick={handleRemoveToken}
+              className="px-3 py-2 font-bold pixel-button text-xs"
+              style={{
+                background: '#F44336',
+                color: '#FFF',
+                border: '2px solid #2D5016',
+                boxShadow: '2px 2px 0px #1A3009',
+                fontFamily: 'monospace',
+                textTransform: 'uppercase'
+              }}
+            >
+              REMOVE
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleConnectOpenRouter}
+            className="px-4 py-2 font-bold pixel-button text-xs"
+            style={{
+              background: '#2196F3',
+              color: '#FFF',
+              border: '2px solid #2D5016',
+              boxShadow: '2px 2px 0px #1A3009',
+              fontFamily: 'monospace',
+              textTransform: 'uppercase'
+            }}
+          >
+            🔗 CONNECT OPENROUTER
+          </button>
+        )}
+      </div>
+
       <header className="mb-8 text-center">
         <h1 className="text-6xl font-bold mb-3 pixel-font" style={{
           color: '#2D5016',
@@ -102,7 +251,7 @@ function TriviaMaker() {
         }}>
           TRIVIA MAKER
         </h1>
-        <p className="text-xl pixel-font" style={{ color: '#4A7C2A' }}>
+        <p className="text-xl pixel-font mb-4" style={{ color: '#4A7C2A' }}>
           ▓▓▓ CREATE CARDS ▓▓▓
         </p>
       </header>
