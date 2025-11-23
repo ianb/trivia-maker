@@ -837,55 +837,7 @@ function TriviaMaker() {
           </div>
         )}
 
-        <div className="container mx-auto px-4 py-8 max-w-6xl relative">
-          {/* OpenRouter Button - Top Right */}
-          <div className="absolute top-0 right-0">
-            {openRouterToken ? (
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-xs pixel-font px-3 py-2"
-                  style={{
-                    color: "#4CAF50",
-                    background: "#E8F5E9",
-                    border: "2px solid #2D5016",
-                    boxShadow: "2px 2px 0px #1A3009",
-                  }}
-                >
-                  ✓ CONNECTED
-                </span>
-                <button
-                  onClick={handleRemoveToken}
-                  className="px-3 py-2 font-bold pixel-button text-xs"
-                  style={{
-                    background: "#F44336",
-                    color: "#FFF",
-                    border: "2px solid #2D5016",
-                    boxShadow: "2px 2px 0px #1A3009",
-                    fontFamily: "monospace",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  REMOVE
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={handleConnectOpenRouter}
-                className="px-4 py-2 font-bold pixel-button text-xs"
-                style={{
-                  background: "#2196F3",
-                  color: "#FFF",
-                  border: "2px solid #2D5016",
-                  boxShadow: "2px 2px 0px #1A3009",
-                  fontFamily: "monospace",
-                  textTransform: "uppercase",
-                }}
-              >
-                🔗 CONNECT OPENROUTER
-              </button>
-            )}
-          </div>
-
+        <div className="container mx-auto px-4 py-8 max-w-6xl">
           <header className="mb-8 text-center">
             <h1
               className="text-6xl font-bold mb-3 pixel-font"
@@ -921,7 +873,7 @@ function TriviaMaker() {
             </h2>
 
             {/* Tabs */}
-            {!editingId && openRouterToken && (
+            {!editingId && (
               <div className="flex gap-2 mb-4">
                 <button
                   onClick={() => setActiveTab("manual")}
@@ -937,20 +889,37 @@ function TriviaMaker() {
                 >
                   ✏️ MANUAL
                 </button>
-                <button
-                  onClick={() => setActiveTab("ai")}
-                  className="px-4 py-2 font-bold pixel-button text-sm"
-                  style={{
-                    background: activeTab === "ai" ? "#2196F3" : "#E8D5C4",
-                    color: activeTab === "ai" ? "#FFF" : "#1A3009",
-                    border: "3px solid #2D5016",
-                    boxShadow: "3px 3px 0px #1A3009",
-                    fontFamily: "monospace",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  🤖 AI GENERATE
-                </button>
+                {openRouterToken ? (
+                  <button
+                    onClick={() => setActiveTab("ai")}
+                    className="px-4 py-2 font-bold pixel-button text-sm"
+                    style={{
+                      background: activeTab === "ai" ? "#2196F3" : "#E8D5C4",
+                      color: activeTab === "ai" ? "#FFF" : "#1A3009",
+                      border: "3px solid #2D5016",
+                      boxShadow: "3px 3px 0px #1A3009",
+                      fontFamily: "monospace",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    🤖 AI GENERATE
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleConnectOpenRouter}
+                    className="px-4 py-2 font-bold pixel-button text-sm"
+                    style={{
+                      background: "#2196F3",
+                      color: "#FFF",
+                      border: "3px solid #2D5016",
+                      boxShadow: "3px 3px 0px #1A3009",
+                      fontFamily: "monospace",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    🔗 CONNECT OPENROUTER
+                  </button>
+                )}
               </div>
             )}
 
@@ -1267,6 +1236,30 @@ function TriviaMaker() {
                       🗑 CLEAR FEEDBACK
                     </button>
                   )}
+                  <button
+                    onClick={() => {
+                      if (
+                        confirm(
+                          "This will remove your OpenRouter connection and you will need to reconnect to use AI generation. Continue?"
+                        )
+                      ) {
+                        handleRemoveToken();
+                        setActiveTab("manual");
+                      }
+                    }}
+                    className="px-4 py-3 font-bold pixel-button transition-all active:scale-95"
+                    style={{
+                      background: "#F44336",
+                      color: "#FFF",
+                      border: "3px solid #2D5016",
+                      boxShadow: "4px 4px 0px #1A3009",
+                      fontFamily: "monospace",
+                      fontSize: "12px",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    REMOVE
+                  </button>
                 </div>
 
                 {generatedQuestions.length > 0 && (
