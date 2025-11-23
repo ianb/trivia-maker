@@ -23,6 +23,7 @@ function TriviaMaker() {
   const [selectedCards, setSelectedCards] = useState(new Set());
   const [printMode, setPrintMode] = useState(false);
   const [viewMode, setViewMode] = useState("grid"); // "grid" or "table"
+  const [showAboutDialog, setShowAboutDialog] = useState(false);
 
   // Helper function to generate random string
   function generateRandomString(length) {
@@ -664,6 +665,106 @@ function TriviaMaker() {
   return (
     <React.Fragment>
       <div className="no-print">
+        {showAboutDialog && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-8"
+            style={{
+              background: "rgba(0, 0, 0, 0.5)",
+            }}
+            onClick={() => setShowAboutDialog(false)}
+          >
+            <div
+              className="pixel-card p-8 max-w-lg w-full"
+              style={{
+                background: "#FFF9C4",
+                border: "6px solid #2D5016",
+                boxShadow: "12px 12px 0px #1A3009",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2
+                className="text-2xl font-bold mb-6 pixel-font text-center"
+                style={{
+                  color: "#2D5016",
+                  textShadow: "2px 2px 0px #1A3009",
+                }}
+              >
+                ABOUT
+              </h2>
+              <div
+                className="space-y-4 text-center"
+                style={{
+                  color: "#1A3009",
+                  fontFamily: "monospace",
+                  fontSize: "14px",
+                  lineHeight: "1.6",
+                }}
+              >
+                <p>
+                  This is vibecoded by{" "}
+                  <a
+                    href="https://ianbicking.org"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: "#2196F3",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    Ian Bicking
+                  </a>
+                </p>
+                <p>
+                  <a
+                    href="https://github.com/ianbicking/trivia-maker"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: "#2196F3",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    View on GitHub
+                  </a>
+                </p>
+                <div
+                  className="mt-6 p-4"
+                  style={{
+                    background: "#E8F5E9",
+                    border: "3px solid #2D5016",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <p style={{ fontWeight: "bold", marginBottom: "8px" }}>
+                    💾 Data Storage
+                  </p>
+                  <p>
+                    All card data is stored in your local browser. Use the
+                    EXPORT button to save or move your cards.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={() => setShowAboutDialog(false)}
+                  className="px-6 py-3 font-bold pixel-button transition-all active:scale-95"
+                  style={{
+                    background: "#4CAF50",
+                    color: "#FFF",
+                    border: "4px solid #2D5016",
+                    boxShadow: "4px 4px 0px #1A3009",
+                    fontFamily: "monospace",
+                    fontSize: "14px",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  CLOSE
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {fullScreenMode && fullScreenCard && (
           <div
             className="fixed inset-0 z-50 flex flex-col items-center justify-center p-8"
@@ -837,21 +938,33 @@ function TriviaMaker() {
           </div>
         )}
 
-        <div className="container mx-auto px-4 py-8 max-w-6xl">
-          <header className="mb-8 text-center">
+        <div className="container mx-auto px-4 py-8 max-w-6xl relative">
+          <header className="mb-8 text-center relative">
+            <button
+              onClick={() => setShowAboutDialog(true)}
+              className="absolute top-0 right-0 px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+              style={{
+                background: "#9E9E9E",
+                color: "#FFF",
+                border: "3px solid #2D5016",
+                boxShadow: "3px 3px 0px #1A3009",
+                fontFamily: "monospace",
+                fontSize: "12px",
+                textTransform: "uppercase",
+              }}
+            >
+              ABOUT
+            </button>
             <h1
               className="text-6xl font-bold mb-3 pixel-font"
               style={{
-                color: "#2D5016",
+                color: "#E55A3D",
                 textShadow: "4px 4px 0px #1A3009, 8px 8px 0px rgba(0,0,0,0.1)",
                 letterSpacing: "2px",
               }}
             >
               TRIVIA MAKER
             </h1>
-            <p className="text-xl pixel-font mb-4" style={{ color: "#4A7C2A" }}>
-              ▓▓▓ CREATE CARDS ▓▓▓
-            </p>
           </header>
 
           <div
