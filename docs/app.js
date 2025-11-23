@@ -1100,6 +1100,7 @@ function TriviaMaker() {
               <TriviaCard
                 key={card.id}
                 card={card}
+                allCards={cards}
                 isFlipped={flippedCards.has(card.id)}
                 onFlip={() => toggleFlip(card.id)}
                 onEdit={() => handleStartEdit(card.id)}
@@ -1114,37 +1115,45 @@ function TriviaMaker() {
 }
 
 // Helper function to generate a consistent color for a category
-function getCategoryColor(category) {
-  if (!category) return { bg: "#9E9E9E", text: "#FFF" };
+// Categories are sorted alphabetically and assigned colors in order
+function getCategoryColor(category, allCards) {
+  if (!category) return { bg: "#6B7280", text: "#FFF" }; // gray-500
 
-  // Generate a hash from the category string
-  let hash = 0;
-  for (let i = 0; i < category.length; i++) {
-    hash = category.charCodeAt(i) + ((hash << 5) - hash);
-  }
+  // Get all unique categories, sorted alphabetically
+  const allCategories = Array.from(
+    new Set(allCards.map((c) => c.category || "Uncategorized").filter(Boolean))
+  ).sort();
 
-  // Generate a color palette with good contrast
-  const colors = [
-    { bg: "#8B4513", text: "#FFF" }, // Brown
-    { bg: "#4A148C", text: "#FFF" }, // Purple
-    { bg: "#00695C", text: "#FFF" }, // Teal
-    { bg: "#B71C1C", text: "#FFF" }, // Red
-    { bg: "#0D47A1", text: "#FFF" }, // Blue
-    { bg: "#1B5E20", text: "#FFF" }, // Green
-    { bg: "#E65100", text: "#FFF" }, // Orange
-    { bg: "#4A148C", text: "#FFF" }, // Deep Purple
-    { bg: "#880E4F", text: "#FFF" }, // Pink
-    { bg: "#1A237E", text: "#FFF" }, // Indigo
-    { bg: "#BF360C", text: "#FFF" }, // Deep Orange
-    { bg: "#004D40", text: "#FFF" }, // Dark Teal
+  // Find the index of this category in the sorted list
+  const categoryIndex = allCategories.indexOf(category || "Uncategorized");
+
+  // Tailwind color palette - diverse, distinct colors for good visual separation
+  const tailwindColors = [
+    { bg: "#2563EB", text: "#FFF" }, // blue-600
+    { bg: "#16A34A", text: "#FFF" }, // green-600
+    { bg: "#DC2626", text: "#FFF" }, // red-600
+    { bg: "#9333EA", text: "#FFF" }, // purple-600
+    { bg: "#EA580C", text: "#FFF" }, // orange-600
+    { bg: "#0891B2", text: "#FFF" }, // cyan-600
+    { bg: "#DB2777", text: "#FFF" }, // pink-600
+    { bg: "#059669", text: "#FFF" }, // emerald-600
+    { bg: "#7C3AED", text: "#FFF" }, // violet-600
+    { bg: "#CA8A04", text: "#FFF" }, // yellow-600
+    { bg: "#0D9488", text: "#FFF" }, // teal-600
+    { bg: "#C026D3", text: "#FFF" }, // fuchsia-600
+    { bg: "#65A30D", text: "#FFF" }, // lime-600
+    { bg: "#0284C7", text: "#FFF" }, // sky-600
+    { bg: "#D97706", text: "#FFF" }, // amber-600
+    { bg: "#E11D48", text: "#FFF" }, // rose-600
   ];
 
-  const index = Math.abs(hash) % colors.length;
-  return colors[index];
+  // Wrap around if there are more categories than colors
+  const colorIndex = categoryIndex % tailwindColors.length;
+  return tailwindColors[colorIndex];
 }
 
-function TriviaCard({ card, isFlipped, onFlip, onEdit, onDelete }) {
-  const categoryColor = getCategoryColor(card.category);
+function TriviaCard({ card, allCards, isFlipped, onFlip, onEdit, onDelete }) {
+  const categoryColor = getCategoryColor(card.category, allCards);
   const category = card.category || "Uncategorized";
 
   return (
