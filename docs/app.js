@@ -448,13 +448,18 @@ function TriviaMaker() {
         messages: [
           {
             role: "system",
-            content: `You are a trivia question generator. You are making questions with compact questions and a canonical answer. Answers should be short and clear (though you may include an explanation in parenthesis if there are multiple possible answers)`,
+            content: `You are a trivia question generator. You are making questions with compact questions and a canonical answer. Answers should be short and clear (though you may include an explanation in parenthesis if there are multiple possible answers)\n\nQuestions and answers may include Markdown formatting and emoji, but make them easy to read out loud.`,
           },
           {
             role: "user",
             content: prompt,
           },
         ],
+        reasoning: {
+          effort: "high",
+          exclude: true,
+          enabled: true,
+        },
       };
 
       console.log("LLM User Message:", prompt);
