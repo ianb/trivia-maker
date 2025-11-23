@@ -1,0 +1,99 @@
+@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap");
+
+body {
+  background: #a8d5ba;
+  background-image: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.03) 2px,
+      rgba(0, 0, 0, 0.03) 4px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.03) 2px,
+      rgba(0, 0, 0, 0.03) 4px
+    );
+  min-height: 100vh;
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+.pixel-font {
+  font-family: "Press Start 2P", monospace;
+  image-rendering: pixelated;
+}
+
+.pixel-card {
+  image-rendering: pixelated;
+}
+
+.pixel-button {
+  image-rendering: pixelated;
+  cursor: pointer;
+}
+
+.pixel-button:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px #1a3009 !important;
+}
+
+.pixel-button:active {
+  transform: translate(4px, 4px);
+  box-shadow: 1px 1px 0px #1a3009 !important;
+}
+
+.pixel-input {
+  image-rendering: pixelated;
+}
+
+.pixel-input:focus {
+  outline: none;
+  box-shadow: inset 4px 4px 0px rgba(45, 80, 22, 0.3) !important;
+}
+
+.markdown-content {
+  max-width: 100%;
+}
+
+.markdown-content p {
+  margin: 0.5em 0;
+}
+
+.markdown-content p:first-child {
+  margin-top: 0;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content strong {
+  font-weight: bold;
+}
+
+.markdown-content em {
+  font-style: italic;
+}
+
+.markdown-content code {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 0.2em 0.4em;
+  border-radius: 2px;
+}
+
+.markdown-content pre {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 0.5em;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  text-align: left;
+  display: inline-block;
+}
