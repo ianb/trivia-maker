@@ -674,7 +674,7 @@ function TriviaMaker() {
             onClick={() => setShowAboutDialog(false)}
           >
             <div
-              className="pixel-card p-8 max-w-lg w-full"
+              className="pixel-card p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto"
               style={{
                 background: "#FFF9C4",
                 border: "6px solid #2D5016",
@@ -692,7 +692,7 @@ function TriviaMaker() {
                 ABOUT
               </h2>
               <div
-                className="space-y-4 text-center"
+                className="space-y-4 text-left"
                 style={{
                   color: "#1A3009",
                   fontFamily: "monospace",
@@ -700,7 +700,7 @@ function TriviaMaker() {
                   lineHeight: "1.6",
                 }}
               >
-                <p>
+                <p className="text-center">
                   This is vibecoded by{" "}
                   <a
                     href="https://ianbicking.org"
@@ -714,7 +714,7 @@ function TriviaMaker() {
                     Ian Bicking
                   </a>
                 </p>
-                <p>
+                <p className="text-center">
                   <a
                     href="https://github.com/ianbicking/trivia-maker"
                     target="_blank"
@@ -741,6 +741,66 @@ function TriviaMaker() {
                   <p>
                     All card data is stored in your local browser. Use the
                     EXPORT button to save or move your cards.
+                  </p>
+                </div>
+                <div
+                  className="mt-6 p-4"
+                  style={{
+                    background: "#E3F2FD",
+                    border: "3px solid #2D5016",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <p style={{ fontWeight: "bold", marginBottom: "8px" }}>
+                    🤖 OpenRouter AI Integration
+                  </p>
+                  <p style={{ marginBottom: "8px" }}>
+                    Trivia Maker can use{" "}
+                    <a
+                      href="https://openrouter.ai"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        color: "#2196F3",
+                        textDecoration: "underline",
+                      }}
+                    >
+                      OpenRouter.ai
+                    </a>{" "}
+                    to generate trivia questions using AI.
+                  </p>
+                  <p style={{ marginBottom: "8px" }}>
+                    <strong>What is OpenRouter?</strong> OpenRouter provides
+                    access to AI models through a single API. Trivia Maker uses
+                    GPT-5.1 to generate questions.
+                  </p>
+                  <p style={{ marginBottom: "8px" }}>
+                    <strong>How it works:</strong>
+                  </p>
+                  <ul style={{ marginLeft: "20px", marginBottom: "8px" }}>
+                    <li>Click "CONNECT OPENROUTER" to authenticate securely</li>
+                    <li>
+                      The AI sees your existing questions and learns from your
+                      feedback
+                    </li>
+                    <li>
+                      Mark questions as "too easy", "too hard", or "format" to
+                      improve future generation
+                    </li>
+                    <li>
+                      Your API key is stored locally and never sent to our
+                      servers
+                    </li>
+                  </ul>
+                  <p style={{ marginBottom: "8px" }}>
+                    <strong>Cost:</strong> You'll need to add money to your
+                    OpenRouter account, but you only pay for what you use. You
+                    can set limits on how much this app can use. If you use it a
+                    lot, it might add up to $1.
+                  </p>
+                  <p>
+                    <strong>Privacy:</strong> All AI requests go directly from
+                    your browser to OpenRouter.
                   </p>
                 </div>
               </div>
