@@ -7,6 +7,7 @@ function TriviaMaker() {
   const [newAnswer, setNewAnswer] = useState("");
   const [newCategory, setNewCategory] = useState("");
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showAiCategoryDropdown, setShowAiCategoryDropdown] = useState(false);
   const [flippedCards, setFlippedCards] = useState(new Set());
   const [openRouterToken, setOpenRouterToken] = useState("");
   const [activeTab, setActiveTab] = useState("manual");
@@ -16,6 +17,9 @@ function TriviaMaker() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [keepingCardIndex, setKeepingCardIndex] = useState(null);
   const [rejectedQuestions, setRejectedQuestions] = useState({}); // { category: [{question, answer, annotation}] }
+  const [fullScreenMode, setFullScreenMode] = useState(false);
+  const [fullScreenCard, setFullScreenCard] = useState(null);
+  const [showFullScreenAnswer, setShowFullScreenAnswer] = useState(false);
 
   // Helper function to generate random string
   function generateRandomString(length) {
@@ -236,6 +240,7 @@ function TriviaMaker() {
         answer: card.answer,
         category: card.category || "Uncategorized",
       })),
+      rejectedQuestions: rejectedQuestions,
     };
 
     const jsonString = JSON.stringify(exportData, null, 2);
@@ -266,12 +271,38 @@ function TriviaMaker() {
             category: item.category || "Uncategorized",
           }));
 
+          let importMessage = `Import ${importedCards.length} card(s)?`;
           if (
-            confirm(
-              `Import ${importedCards.length} card(s)? This will add them to your existing cards.`
-            )
+            data.rejectedQuestions &&
+            Object.keys(data.rejectedQuestions).length > 0
           ) {
+            const feedbackCount = Object.values(data.rejectedQuestions).reduce(
+              (sum, arr) => sum + arr.length,
+              0
+            );
+            importMessage += ` This will also import ${feedbackCount} feedback item(s).`;
+          }
+          importMessage +=
+            " This will add them to your existing cards and feedback.";
+
+          if (confirm(importMessage)) {
             setCards([...cards, ...importedCards]);
+            if (data.rejectedQuestions) {
+              setRejectedQuestions((prev) => {
+                const merged = { ...prev };
+                Object.keys(data.rejectedQuestions).forEach((category) => {
+                  if (merged[category]) {
+                    merged[category] = [
+                      ...merged[category],
+                      ...data.rejectedQuestions[category],
+                    ];
+                  } else {
+                    merged[category] = data.rejectedQuestions[category];
+                  }
+                });
+                return merged;
+              });
+            }
           }
         } else {
           alert('Invalid file format. Expected {"triviaQuestions": [...]}');
@@ -309,28 +340,73 @@ function TriviaMaker() {
       // Get rejected questions for this category
       const categoryKey = aiCategory.trim() || "Uncategorized";
       const categoryRejected = rejectedQuestions[categoryKey] || [];
-      const rejectedText = categoryRejected
-        .map((rejected) => {
-          const tag =
-            rejected.annotation === "too-easy" ? "<too-easy>" : "<too-hard>";
-          return `${tag}\n${rejected.question}: ${rejected.answer}\n</${rejected.annotation}>`;
-        })
-        .join("\n\n");
+
+      // Separate rejected questions by type
+      const tooEasyRejected = categoryRejected.filter(
+        (r) => r.annotation === "too-easy"
+      );
+      const tooHardRejected = categoryRejected.filter(
+        (r) => r.annotation === "too-hard"
+      );
+      const formatRejected = categoryRejected.filter(
+        (r) => r.annotation === "format"
+      );
+
+      let rejectedText = "";
+
+      if (tooEasyRejected.length > 0) {
+        const tooEasyText = tooEasyRejected
+          .map(
+            (rejected) =>
+              `<feedback user-feedback="${(rejected.userFeedback || "").replace(
+                /"/g,
+                "&quot;"
+              )}">${rejected.question}: ${rejected.answer}</feedback>`
+          )
+          .join("\n\n");
+        rejectedText += `Questions marked as too easy:\n${tooEasyText}\n\n`;
+      }
+
+      if (tooHardRejected.length > 0) {
+        const tooHardText = tooHardRejected
+          .map(
+            (rejected) =>
+              `<feedback user-feedback="${(rejected.userFeedback || "").replace(
+                /"/g,
+                "&quot;"
+              )}">${rejected.question}: ${rejected.answer}</feedback>`
+          )
+          .join("\n\n");
+        rejectedText += `Questions marked as too hard:\n${tooHardText}\n\n`;
+      }
+
+      if (formatRejected.length > 0) {
+        const formatText = formatRejected
+          .map(
+            (rejected) =>
+              `<feedback user-feedback="${(rejected.userFeedback || "").replace(
+                /"/g,
+                "&quot;"
+              )}">${rejected.question}: ${rejected.answer}</feedback>`
+          )
+          .join("\n\n");
+        rejectedText += `Questions with format issues:\n${formatText}\n\n`;
+      }
 
       // Build the prompt
-      let prompt = `Generate 5 trivia questions about "${aiCategory}".\n\n`;
+      let prompt = `<category>\n${aiCategory}\n</category>\n\nGenerate 5 trivia questions about this category.\n\n`;
 
       if (existingQuestionsText) {
         prompt += `Here are the existing questions in this category (try to make new kinds of questions different than these):\n${existingQuestionsText}\n\n`;
       }
 
       if (rejectedText) {
-        prompt += `Here are some questions that were rejected with feedback:\n${rejectedText}\n\n`;
+        prompt += `Here are some questions that were rejected with feedback:\n${rejectedText}`;
         prompt += `You may generate a similar question to those that were rejected, so long as you incorporate the feedback.\n\n`;
       }
 
       if (aiInput.trim()) {
-        prompt += `Additional instructions: ${aiInput.trim()}\n\n`;
+        prompt += `<additional-user-instructions>\n${aiInput.trim()}\n</additional-user-instructions>\n\n`;
       }
 
       const requestBody = {
@@ -379,7 +455,7 @@ function TriviaMaker() {
         ],
       };
 
-      console.log("LLM Request:", JSON.stringify(requestBody, null, 2));
+      console.log("LLM User Message:", prompt);
 
       const response = await fetch(
         "https://openrouter.ai/api/v1/chat/completions",
@@ -455,23 +531,47 @@ function TriviaMaker() {
   }
 
   function handleRejectQuestion(question, answer, index, annotation) {
-    const categoryKey = aiCategory.trim() || "Uncategorized";
-    setRejectedQuestions((prev) => {
-      const categoryRejected = prev[categoryKey] || [];
-      return {
-        ...prev,
-        [categoryKey]: [
-          ...categoryRejected,
-          {
-            question: question.trim(),
-            answer: answer.trim(),
-            annotation: annotation,
-          },
-        ],
-      };
-    });
-    // Remove the question from the generated list
-    setGeneratedQuestions((prev) => prev.filter((_, i) => i !== index));
+    // Get feedback from user
+    const promptMessages = {
+      "too-easy": "Why is this question too easy?",
+      "too-hard": "Why is this question too hard?",
+      format:
+        "What format issue does this question have? (e.g., poor question length, ambiguous answer, answer revealed in question)",
+    };
+
+    const userFeedback = window.prompt(
+      promptMessages[annotation] || "Why was this question rejected?"
+    );
+
+    // If user cancels, don't reject
+    if (userFeedback === null) {
+      return;
+    }
+
+    // Add transition animation
+    setKeepingCardIndex(index);
+
+    setTimeout(() => {
+      const categoryKey = aiCategory.trim() || "Uncategorized";
+      setRejectedQuestions((prev) => {
+        const categoryRejected = prev[categoryKey] || [];
+        return {
+          ...prev,
+          [categoryKey]: [
+            ...categoryRejected,
+            {
+              question: question.trim(),
+              answer: answer.trim(),
+              annotation: annotation,
+              userFeedback: userFeedback.trim() || "",
+            },
+          ],
+        };
+      });
+      // Remove the question from the generated list
+      setGeneratedQuestions((prev) => prev.filter((_, i) => i !== index));
+      setKeepingCardIndex(null);
+    }, 300);
   }
 
   function handleClearFeedback() {
@@ -481,6 +581,30 @@ function TriviaMaker() {
       delete updated[categoryKey];
       return updated;
     });
+  }
+
+  function handleOpenFullScreen() {
+    if (cards.length === 0) {
+      alert("No cards available!");
+      return;
+    }
+    const randomIndex = Math.floor(Math.random() * cards.length);
+    setFullScreenCard(cards[randomIndex]);
+    setShowFullScreenAnswer(false);
+    setFullScreenMode(true);
+  }
+
+  function handleNextRandomCard() {
+    if (cards.length === 0) return;
+    const randomIndex = Math.floor(Math.random() * cards.length);
+    setFullScreenCard(cards[randomIndex]);
+    setShowFullScreenAnswer(false);
+  }
+
+  function handleCloseFullScreen() {
+    setFullScreenMode(false);
+    setFullScreenCard(null);
+    setShowFullScreenAnswer(false);
   }
 
   // Get unique categories from existing cards, filtered by current input
@@ -495,27 +619,216 @@ function TriviaMaker() {
     .sort();
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl relative">
-      {/* OpenRouter Button - Top Right */}
-      <div className="absolute top-0 right-0">
-        {openRouterToken ? (
-          <div className="flex items-center gap-2">
-            <span
-              className="text-xs pixel-font px-3 py-2"
+    <>
+      {fullScreenMode && fullScreenCard && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center p-8"
+          style={{
+            background: "#A8D5BA",
+            backgroundImage: `repeating-linear-gradient(
+              0deg,
+              transparent,
+              transparent 2px,
+              rgba(0, 0, 0, 0.03) 2px,
+              rgba(0, 0, 0, 0.03) 4px
+            ),
+            repeating-linear-gradient(
+              90deg,
+              transparent,
+              transparent 2px,
+              rgba(0, 0, 0, 0.03) 2px,
+              rgba(0, 0, 0, 0.03) 4px
+            )`,
+          }}
+        >
+          <div
+            className="w-full max-w-4xl flex flex-col h-full"
+            style={{
+              background: "#FFF9C4",
+              border: "6px solid #2D5016",
+              boxShadow: "12px 12px 0px #1A3009",
+            }}
+          >
+            {/* Category Header */}
+            <div
+              className="px-6 py-4 text-center pixel-font text-sm font-bold"
               style={{
-                color: "#4CAF50",
-                background: "#E8F5E9",
-                border: "2px solid #2D5016",
-                boxShadow: "2px 2px 0px #1A3009",
+                background: getCategoryColor(fullScreenCard.category, cards).bg,
+                color: getCategoryColor(fullScreenCard.category, cards).text,
+                borderBottom: "4px solid #2D5016",
               }}
             >
-              ✓ CONNECTED
-            </span>
+              {(fullScreenCard.category || "Uncategorized").toUpperCase()}
+            </div>
+
+            {/* Question */}
+            <div className="flex-1 flex items-center justify-center p-12 overflow-auto">
+              <div
+                className="text-center leading-relaxed markdown-content"
+                style={{
+                  color: "#1A3009",
+                  fontFamily: "monospace",
+                  fontSize: "32px",
+                  lineHeight: "1.8",
+                }}
+                dangerouslySetInnerHTML={{
+                  __html:
+                    typeof marked !== "undefined"
+                      ? marked.parse(fullScreenCard.question)
+                      : fullScreenCard.question.replace(/\n/g, "<br/>"),
+                }}
+              />
+            </div>
+
+            {/* Answer (shown below question) */}
+            {showFullScreenAnswer && (
+              <div
+                className="px-12 pb-12 border-t-6"
+                style={{ borderColor: "#2D5016" }}
+              >
+                <div
+                  className="text-center leading-relaxed markdown-content mt-8"
+                  style={{
+                    color: "#1A3009",
+                    fontFamily: "monospace",
+                    fontSize: "28px",
+                    lineHeight: "1.8",
+                    background: "#C8E6C9",
+                    padding: "24px",
+                    border: "4px solid #2D5016",
+                    boxShadow: "4px 4px 0px #1A3009",
+                  }}
+                >
+                  <div
+                    className="text-xs pixel-font mb-2"
+                    style={{ color: "#2D5016" }}
+                  >
+                    ANSWER:
+                  </div>
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html:
+                        typeof marked !== "undefined"
+                          ? marked.parse(fullScreenCard.answer)
+                          : fullScreenCard.answer.replace(/\n/g, "<br/>"),
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Buttons */}
+            <div
+              className="p-6 flex gap-4 border-t-6"
+              style={{ borderColor: "#2D5016", background: "#C8E6C9" }}
+            >
+              {!showFullScreenAnswer ? (
+                <button
+                  onClick={() => setShowFullScreenAnswer(true)}
+                  className="flex-1 px-6 py-4 font-bold pixel-button transition-all active:scale-95"
+                  style={{
+                    background: "#4CAF50",
+                    color: "#FFF",
+                    border: "4px solid #2D5016",
+                    boxShadow: "4px 4px 0px #1A3009",
+                    fontFamily: "monospace",
+                    fontSize: "18px",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  👁 SHOW ANSWER
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={handleNextRandomCard}
+                    className="flex-1 px-6 py-4 font-bold pixel-button transition-all active:scale-95"
+                    style={{
+                      background: "#2196F3",
+                      color: "#FFF",
+                      border: "4px solid #2D5016",
+                      boxShadow: "4px 4px 0px #1A3009",
+                      fontFamily: "monospace",
+                      fontSize: "18px",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    🎲 NEXT RANDOM
+                  </button>
+                  <button
+                    onClick={() => setShowFullScreenAnswer(false)}
+                    className="flex-1 px-6 py-4 font-bold pixel-button transition-all active:scale-95"
+                    style={{
+                      background: "#FFC107",
+                      color: "#1A3009",
+                      border: "4px solid #2D5016",
+                      boxShadow: "4px 4px 0px #1A3009",
+                      fontFamily: "monospace",
+                      fontSize: "18px",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    🔄 HIDE ANSWER
+                  </button>
+                </>
+              )}
+              <button
+                onClick={handleCloseFullScreen}
+                className="px-6 py-4 font-bold pixel-button transition-all active:scale-95"
+                style={{
+                  background: "#F44336",
+                  color: "#FFF",
+                  border: "4px solid #2D5016",
+                  boxShadow: "4px 4px 0px #1A3009",
+                  fontFamily: "monospace",
+                  fontSize: "18px",
+                  textTransform: "uppercase",
+                }}
+              >
+                ✕ CLOSE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="container mx-auto px-4 py-8 max-w-6xl relative">
+        {/* OpenRouter Button - Top Right */}
+        <div className="absolute top-0 right-0">
+          {openRouterToken ? (
+            <div className="flex items-center gap-2">
+              <span
+                className="text-xs pixel-font px-3 py-2"
+                style={{
+                  color: "#4CAF50",
+                  background: "#E8F5E9",
+                  border: "2px solid #2D5016",
+                  boxShadow: "2px 2px 0px #1A3009",
+                }}
+              >
+                ✓ CONNECTED
+              </span>
+              <button
+                onClick={handleRemoveToken}
+                className="px-3 py-2 font-bold pixel-button text-xs"
+                style={{
+                  background: "#F44336",
+                  color: "#FFF",
+                  border: "2px solid #2D5016",
+                  boxShadow: "2px 2px 0px #1A3009",
+                  fontFamily: "monospace",
+                  textTransform: "uppercase",
+                }}
+              >
+                REMOVE
+              </button>
+            </div>
+          ) : (
             <button
-              onClick={handleRemoveToken}
-              className="px-3 py-2 font-bold pixel-button text-xs"
+              onClick={handleConnectOpenRouter}
+              className="px-4 py-2 font-bold pixel-button text-xs"
               style={{
-                background: "#F44336",
+                background: "#2196F3",
                 color: "#FFF",
                 border: "2px solid #2D5016",
                 boxShadow: "2px 2px 0px #1A3009",
@@ -523,165 +836,95 @@ function TriviaMaker() {
                 textTransform: "uppercase",
               }}
             >
-              REMOVE
+              🔗 CONNECT OPENROUTER
             </button>
-          </div>
-        ) : (
-          <button
-            onClick={handleConnectOpenRouter}
-            className="px-4 py-2 font-bold pixel-button text-xs"
+          )}
+        </div>
+
+        <header className="mb-8 text-center">
+          <h1
+            className="text-6xl font-bold mb-3 pixel-font"
             style={{
-              background: "#2196F3",
-              color: "#FFF",
-              border: "2px solid #2D5016",
-              boxShadow: "2px 2px 0px #1A3009",
-              fontFamily: "monospace",
-              textTransform: "uppercase",
+              color: "#2D5016",
+              textShadow: "4px 4px 0px #1A3009, 8px 8px 0px rgba(0,0,0,0.1)",
+              letterSpacing: "2px",
             }}
           >
-            🔗 CONNECT OPENROUTER
-          </button>
-        )}
-      </div>
+            TRIVIA MAKER
+          </h1>
+          <p className="text-xl pixel-font mb-4" style={{ color: "#4A7C2A" }}>
+            ▓▓▓ CREATE CARDS ▓▓▓
+          </p>
+        </header>
 
-      <header className="mb-8 text-center">
-        <h1
-          className="text-6xl font-bold mb-3 pixel-font"
+        <div
+          className="pixel-card p-6 mb-8"
           style={{
-            color: "#2D5016",
-            textShadow: "4px 4px 0px #1A3009, 8px 8px 0px rgba(0,0,0,0.1)",
-            letterSpacing: "2px",
+            background: "#E8F5E9",
+            border: "4px solid #2D5016",
+            boxShadow: "8px 8px 0px #1A3009",
           }}
         >
-          TRIVIA MAKER
-        </h1>
-        <p className="text-xl pixel-font mb-4" style={{ color: "#4A7C2A" }}>
-          ▓▓▓ CREATE CARDS ▓▓▓
-        </p>
-      </header>
+          <h2
+            className="text-3xl font-bold mb-5 pixel-font"
+            style={{
+              color: "#2D5016",
+              textShadow: "2px 2px 0px #1A3009",
+            }}
+          >
+            {editingId ? "✎ EDIT CARD" : "➕ NEW CARD"}
+          </h2>
 
-      <div
-        className="pixel-card p-6 mb-8"
-        style={{
-          background: "#E8F5E9",
-          border: "4px solid #2D5016",
-          boxShadow: "8px 8px 0px #1A3009",
-        }}
-      >
-        <h2
-          className="text-3xl font-bold mb-5 pixel-font"
-          style={{
-            color: "#2D5016",
-            textShadow: "2px 2px 0px #1A3009",
-          }}
-        >
-          {editingId ? "✎ EDIT CARD" : "➕ NEW CARD"}
-        </h2>
-
-        {/* Tabs */}
-        {!editingId && openRouterToken && (
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => setActiveTab("manual")}
-              className="px-4 py-2 font-bold pixel-button text-sm"
-              style={{
-                background: activeTab === "manual" ? "#2196F3" : "#E8D5C4",
-                color: activeTab === "manual" ? "#FFF" : "#1A3009",
-                border: "3px solid #2D5016",
-                boxShadow: "3px 3px 0px #1A3009",
-                fontFamily: "monospace",
-                textTransform: "uppercase",
-              }}
-            >
-              ✏️ MANUAL
-            </button>
-            <button
-              onClick={() => setActiveTab("ai")}
-              className="px-4 py-2 font-bold pixel-button text-sm"
-              style={{
-                background: activeTab === "ai" ? "#2196F3" : "#E8D5C4",
-                color: activeTab === "ai" ? "#FFF" : "#1A3009",
-                border: "3px solid #2D5016",
-                boxShadow: "3px 3px 0px #1A3009",
-                fontFamily: "monospace",
-                textTransform: "uppercase",
-              }}
-            >
-              🤖 AI GENERATE
-            </button>
-          </div>
-        )}
-
-        {/* Manual Tab */}
-        {activeTab === "manual" && (
-          <div className="space-y-4">
-            <div>
-              <label
-                className="block text-sm font-bold mb-2 pixel-font"
-                style={{ color: "#2D5016" }}
-              >
-                QUESTION:
-              </label>
-              <textarea
-                className="w-full px-4 py-3 pixel-input focus:outline-none"
-                rows="3"
-                placeholder="Type your question here... (Markdown supported)"
-                value={newQuestion}
-                onChange={(e) => setNewQuestion(e.target.value)}
+          {/* Tabs */}
+          {!editingId && openRouterToken && (
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setActiveTab("manual")}
+                className="px-4 py-2 font-bold pixel-button text-sm"
                 style={{
-                  background: "#FFF",
+                  background: activeTab === "manual" ? "#2196F3" : "#E8D5C4",
+                  color: activeTab === "manual" ? "#FFF" : "#1A3009",
                   border: "3px solid #2D5016",
+                  boxShadow: "3px 3px 0px #1A3009",
                   fontFamily: "monospace",
-                  fontSize: "14px",
-                  color: "#1A3009",
-                  boxShadow: "inset 3px 3px 0px rgba(45, 80, 22, 0.2)",
+                  textTransform: "uppercase",
                 }}
-              />
-            </div>
-            <div>
-              <label
-                className="block text-sm font-bold mb-2 pixel-font"
-                style={{ color: "#2D5016" }}
               >
-                ANSWER:
-              </label>
-              <textarea
-                className="w-full px-4 py-3 pixel-input focus:outline-none"
-                rows="3"
-                placeholder="Type the answer here... (Markdown supported)"
-                value={newAnswer}
-                onChange={(e) => setNewAnswer(e.target.value)}
+                ✏️ MANUAL
+              </button>
+              <button
+                onClick={() => setActiveTab("ai")}
+                className="px-4 py-2 font-bold pixel-button text-sm"
                 style={{
-                  background: "#FFF",
+                  background: activeTab === "ai" ? "#2196F3" : "#E8D5C4",
+                  color: activeTab === "ai" ? "#FFF" : "#1A3009",
                   border: "3px solid #2D5016",
+                  boxShadow: "3px 3px 0px #1A3009",
                   fontFamily: "monospace",
-                  fontSize: "14px",
-                  color: "#1A3009",
-                  boxShadow: "inset 3px 3px 0px rgba(45, 80, 22, 0.2)",
+                  textTransform: "uppercase",
                 }}
-              />
-            </div>
-            <div>
-              <label
-                className="block text-sm font-bold mb-2 pixel-font"
-                style={{ color: "#2D5016" }}
               >
-                CATEGORY:
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
+                🤖 AI GENERATE
+              </button>
+            </div>
+          )}
+
+          {/* Manual Tab */}
+          {activeTab === "manual" && (
+            <div className="space-y-4">
+              <div>
+                <label
+                  className="block text-sm font-bold mb-2 pixel-font"
+                  style={{ color: "#2D5016" }}
+                >
+                  QUESTION:
+                </label>
+                <textarea
                   className="w-full px-4 py-3 pixel-input focus:outline-none"
-                  placeholder="Enter or select category..."
-                  value={newCategory}
-                  onChange={(e) => {
-                    setNewCategory(e.target.value);
-                    setShowCategoryDropdown(true);
-                  }}
-                  onFocus={() => setShowCategoryDropdown(true)}
-                  onBlur={() =>
-                    setTimeout(() => setShowCategoryDropdown(false), 200)
-                  }
+                  rows="3"
+                  placeholder="Type your question here... (Markdown supported)"
+                  value={newQuestion}
+                  onChange={(e) => setNewQuestion(e.target.value)}
                   style={{
                     background: "#FFF",
                     border: "3px solid #2D5016",
@@ -691,45 +934,131 @@ function TriviaMaker() {
                     boxShadow: "inset 3px 3px 0px rgba(45, 80, 22, 0.2)",
                   }}
                 />
-                {showCategoryDropdown && existingCategories.length > 0 && (
-                  <div
-                    className="absolute z-10 w-full mt-1"
+              </div>
+              <div>
+                <label
+                  className="block text-sm font-bold mb-2 pixel-font"
+                  style={{ color: "#2D5016" }}
+                >
+                  ANSWER:
+                </label>
+                <textarea
+                  className="w-full px-4 py-3 pixel-input focus:outline-none"
+                  rows="3"
+                  placeholder="Type the answer here... (Markdown supported)"
+                  value={newAnswer}
+                  onChange={(e) => setNewAnswer(e.target.value)}
+                  style={{
+                    background: "#FFF",
+                    border: "3px solid #2D5016",
+                    fontFamily: "monospace",
+                    fontSize: "14px",
+                    color: "#1A3009",
+                    boxShadow: "inset 3px 3px 0px rgba(45, 80, 22, 0.2)",
+                  }}
+                />
+              </div>
+              <div>
+                <label
+                  className="block text-sm font-bold mb-2 pixel-font"
+                  style={{ color: "#2D5016" }}
+                >
+                  CATEGORY:
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    className="w-full px-4 py-3 pixel-input focus:outline-none"
+                    placeholder="Enter or select category..."
+                    value={newCategory}
+                    onChange={(e) => {
+                      setNewCategory(e.target.value);
+                      setShowCategoryDropdown(true);
+                    }}
+                    onFocus={() => setShowCategoryDropdown(true)}
+                    onBlur={() =>
+                      setTimeout(() => setShowCategoryDropdown(false), 200)
+                    }
                     style={{
                       background: "#FFF",
                       border: "3px solid #2D5016",
-                      boxShadow: "4px 4px 0px #1A3009",
-                      maxHeight: "200px",
-                      overflowY: "auto",
+                      fontFamily: "monospace",
+                      fontSize: "14px",
+                      color: "#1A3009",
+                      boxShadow: "inset 3px 3px 0px rgba(45, 80, 22, 0.2)",
                     }}
-                  >
-                    {existingCategories.map((cat) => (
-                      <div
-                        key={cat}
-                        onClick={() => {
-                          setNewCategory(cat);
-                          setShowCategoryDropdown(false);
-                        }}
-                        className="px-4 py-2 cursor-pointer hover:bg-gray-100 pixel-font text-sm"
-                        style={{
-                          color: "#1A3009",
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {cat}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                  />
+                  {showCategoryDropdown && existingCategories.length > 0 && (
+                    <div
+                      className="absolute z-10 w-full mt-1"
+                      style={{
+                        background: "#FFF",
+                        border: "3px solid #2D5016",
+                        boxShadow: "4px 4px 0px #1A3009",
+                        maxHeight: "200px",
+                        overflowY: "auto",
+                      }}
+                    >
+                      {existingCategories.map((cat) => (
+                        <div
+                          key={cat}
+                          onClick={() => {
+                            setNewCategory(cat);
+                            setShowCategoryDropdown(false);
+                          }}
+                          className="px-4 py-2 cursor-pointer hover:bg-gray-100 pixel-font text-sm"
+                          style={{
+                            color: "#1A3009",
+                            fontFamily: "monospace",
+                          }}
+                        >
+                          {cat}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="flex gap-3">
-              {editingId ? (
-                <>
+              <div className="flex gap-3">
+                {editingId ? (
+                  <>
+                    <button
+                      onClick={handleSaveEdit}
+                      className="px-6 py-3 font-bold pixel-button transition-all active:scale-95"
+                      style={{
+                        background: "#4CAF50",
+                        color: "#FFF",
+                        border: "3px solid #2D5016",
+                        boxShadow: "4px 4px 0px #1A3009",
+                        fontFamily: "monospace",
+                        fontSize: "14px",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      ✓ SAVE
+                    </button>
+                    <button
+                      onClick={handleCancelEdit}
+                      className="px-6 py-3 font-bold pixel-button transition-all active:scale-95"
+                      style={{
+                        background: "#FFC107",
+                        color: "#1A3009",
+                        border: "3px solid #2D5016",
+                        boxShadow: "4px 4px 0px #1A3009",
+                        fontFamily: "monospace",
+                        fontSize: "14px",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      ✗ CANCEL
+                    </button>
+                  </>
+                ) : (
                   <button
-                    onClick={handleSaveEdit}
+                    onClick={handleAddCard}
                     className="px-6 py-3 font-bold pixel-button transition-all active:scale-95"
                     style={{
-                      background: "#4CAF50",
+                      background: "#2196F3",
                       color: "#FFF",
                       border: "3px solid #2D5016",
                       boxShadow: "4px 4px 0px #1A3009",
@@ -738,379 +1067,439 @@ function TriviaMaker() {
                       textTransform: "uppercase",
                     }}
                   >
-                    ✓ SAVE
+                    + ADD CARD
                   </button>
-                  <button
-                    onClick={handleCancelEdit}
-                    className="px-6 py-3 font-bold pixel-button transition-all active:scale-95"
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* AI Tab */}
+          {activeTab === "ai" && !editingId && (
+            <div className="space-y-4">
+              <div>
+                <label
+                  className="block text-sm font-bold mb-2 pixel-font"
+                  style={{ color: "#2D5016" }}
+                >
+                  CATEGORY:
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    className="w-full px-4 py-3 pixel-input focus:outline-none"
+                    placeholder="Enter or select category..."
+                    value={aiCategory}
+                    onChange={(e) => {
+                      setAiCategory(e.target.value);
+                      setShowAiCategoryDropdown(true);
+                    }}
+                    onFocus={() => setShowAiCategoryDropdown(true)}
+                    onBlur={() =>
+                      setTimeout(() => setShowAiCategoryDropdown(false), 200)
+                    }
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter" && !isGenerating) {
+                        handleGenerateQuestions();
+                      }
+                    }}
                     style={{
-                      background: "#FFC107",
-                      color: "#1A3009",
+                      background: "#FFF",
                       border: "3px solid #2D5016",
-                      boxShadow: "4px 4px 0px #1A3009",
                       fontFamily: "monospace",
                       fontSize: "14px",
-                      textTransform: "uppercase",
+                      color: "#1A3009",
+                      boxShadow: "inset 3px 3px 0px rgba(45, 80, 22, 0.2)",
                     }}
-                  >
-                    ✗ CANCEL
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={handleAddCard}
-                  className="px-6 py-3 font-bold pixel-button transition-all active:scale-95"
+                  />
+                  {showAiCategoryDropdown && existingCategories.length > 0 && (
+                    <div
+                      className="absolute z-10 w-full mt-1"
+                      style={{
+                        background: "#FFF",
+                        border: "3px solid #2D5016",
+                        boxShadow: "4px 4px 0px #1A3009",
+                        maxHeight: "200px",
+                        overflowY: "auto",
+                      }}
+                    >
+                      {existingCategories
+                        .filter((cat) =>
+                          aiCategory.trim()
+                            ? cat
+                                .toLowerCase()
+                                .includes(aiCategory.toLowerCase())
+                            : true
+                        )
+                        .map((cat) => (
+                          <div
+                            key={cat}
+                            onClick={() => {
+                              setAiCategory(cat);
+                              setShowAiCategoryDropdown(false);
+                            }}
+                            className="px-4 py-2 cursor-pointer hover:bg-gray-100 pixel-font text-sm"
+                            style={{
+                              color: "#1A3009",
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            {cat}
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label
+                  className="block text-sm font-bold mb-2 pixel-font"
+                  style={{ color: "#2D5016" }}
+                >
+                  INPUT (OPTIONAL):
+                </label>
+                <textarea
+                  className="w-full px-4 py-3 pixel-input focus:outline-none"
+                  rows="2"
+                  placeholder="Any additional instructions or feedback for the AI..."
+                  value={aiInput}
+                  onChange={(e) => setAiInput(e.target.value)}
                   style={{
-                    background: "#2196F3",
+                    background: "#FFF",
+                    border: "3px solid #2D5016",
+                    fontFamily: "monospace",
+                    fontSize: "14px",
+                    color: "#1A3009",
+                    boxShadow: "inset 3px 3px 0px rgba(45, 80, 22, 0.2)",
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleGenerateQuestions}
+                  disabled={isGenerating || !aiCategory.trim()}
+                  className="px-6 py-3 font-bold pixel-button transition-all active:scale-95 flex-1"
+                  style={{
+                    background:
+                      isGenerating || !aiCategory.trim()
+                        ? "#9E9E9E"
+                        : "#9C27B0",
                     color: "#FFF",
                     border: "3px solid #2D5016",
                     boxShadow: "4px 4px 0px #1A3009",
                     fontFamily: "monospace",
                     fontSize: "14px",
                     textTransform: "uppercase",
+                    cursor:
+                      isGenerating || !aiCategory.trim()
+                        ? "not-allowed"
+                        : "pointer",
+                    opacity: isGenerating || !aiCategory.trim() ? 0.6 : 1,
                   }}
                 >
-                  + ADD CARD
+                  {isGenerating ? "⏳ GENERATING..." : "✨ GENERATE QUESTIONS"}
                 </button>
+                {(rejectedQuestions[aiCategory.trim() || "Uncategorized"] || [])
+                  .length > 0 && (
+                  <button
+                    onClick={handleClearFeedback}
+                    className="px-4 py-3 font-bold pixel-button transition-all active:scale-95"
+                    style={{
+                      background: "#FF9800",
+                      color: "#FFF",
+                      border: "3px solid #2D5016",
+                      boxShadow: "4px 4px 0px #1A3009",
+                      fontFamily: "monospace",
+                      fontSize: "12px",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    🗑 CLEAR FEEDBACK
+                  </button>
+                )}
+              </div>
+
+              {generatedQuestions.length > 0 && (
+                <div className="mt-6 space-y-4">
+                  <h3
+                    className="text-xl font-bold pixel-font"
+                    style={{ color: "#2D5016" }}
+                  >
+                    GENERATED QUESTIONS ({generatedQuestions.length}):
+                  </h3>
+                  {generatedQuestions.map((item, index) => (
+                    <div
+                      key={index}
+                      className="p-4"
+                      style={{
+                        background: "#FFF9C4",
+                        border: "3px solid #2D5016",
+                        boxShadow: "3px 3px 0px #1A3009",
+                        transition: "all 0.3s ease",
+                        opacity: keepingCardIndex === index ? 0 : 1,
+                        transform:
+                          keepingCardIndex === index
+                            ? "scale(0.8) translateY(-20px)"
+                            : "scale(1) translateY(0)",
+                      }}
+                    >
+                      <div className="mb-3">
+                        <div
+                          className="text-sm font-bold pixel-font mb-1"
+                          style={{ color: "#2D5016" }}
+                        >
+                          Q:
+                        </div>
+                        <div
+                          className="text-sm markdown-content"
+                          style={{
+                            color: "#1A3009",
+                            fontFamily: "monospace",
+                            marginBottom: "8px",
+                          }}
+                          dangerouslySetInnerHTML={{
+                            __html:
+                              typeof marked !== "undefined"
+                                ? marked.parse(item.question || "")
+                                : (item.question || "").replace(/\n/g, "<br/>"),
+                          }}
+                        />
+                      </div>
+                      <div className="mb-3">
+                        <div
+                          className="text-sm font-bold pixel-font mb-1"
+                          style={{ color: "#2D5016" }}
+                        >
+                          A:
+                        </div>
+                        <div
+                          className="text-sm markdown-content"
+                          style={{
+                            color: "#1A3009",
+                            fontFamily: "monospace",
+                          }}
+                          dangerouslySetInnerHTML={{
+                            __html:
+                              typeof marked !== "undefined"
+                                ? marked.parse(item.answer || "")
+                                : (item.answer || "").replace(/\n/g, "<br/>"),
+                          }}
+                        />
+                      </div>
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          onClick={() =>
+                            handleRejectQuestion(
+                              item.question,
+                              item.answer,
+                              index,
+                              "too-easy"
+                            )
+                          }
+                          className="flex-1 min-w-[80px] px-2 py-2 font-bold pixel-button text-xs"
+                          style={{
+                            background: "#FF9800",
+                            color: "#FFF",
+                            border: "2px solid #2D5016",
+                            boxShadow: "2px 2px 0px #1A3009",
+                            fontFamily: "monospace",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          ⬇ EASIER
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleRejectQuestion(
+                              item.question,
+                              item.answer,
+                              index,
+                              "too-hard"
+                            )
+                          }
+                          className="flex-1 min-w-[80px] px-2 py-2 font-bold pixel-button text-xs"
+                          style={{
+                            background: "#9C27B0",
+                            color: "#FFF",
+                            border: "2px solid #2D5016",
+                            boxShadow: "2px 2px 0px #1A3009",
+                            fontFamily: "monospace",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          ⬆ HARDER
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleRejectQuestion(
+                              item.question,
+                              item.answer,
+                              index,
+                              "format"
+                            )
+                          }
+                          className="flex-1 min-w-[80px] px-2 py-2 font-bold pixel-button text-xs"
+                          style={{
+                            background: "#2196F3",
+                            color: "#FFF",
+                            border: "2px solid #2D5016",
+                            boxShadow: "2px 2px 0px #1A3009",
+                            fontFamily: "monospace",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          📝 FORMAT
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleKeepQuestion(
+                              item.question,
+                              item.answer,
+                              index
+                            )
+                          }
+                          className="flex-1 min-w-[80px] px-2 py-2 font-bold pixel-button text-xs"
+                          style={{
+                            background: "#4CAF50",
+                            color: "#FFF",
+                            border: "2px solid #2D5016",
+                            boxShadow: "2px 2px 0px #1A3009",
+                            fontFamily: "monospace",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          ✓ KEEP
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* AI Tab */}
-        {activeTab === "ai" && !editingId && (
-          <div className="space-y-4">
-            <div>
-              <label
-                className="block text-sm font-bold mb-2 pixel-font"
-                style={{ color: "#2D5016" }}
-              >
-                CATEGORY:
-              </label>
-              <input
-                type="text"
-                className="w-full px-4 py-3 pixel-input focus:outline-none"
-                placeholder="e.g., World History, Science, Pop Culture..."
-                value={aiCategory}
-                onChange={(e) => setAiCategory(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && !isGenerating) {
-                    handleGenerateQuestions();
-                  }
-                }}
+        {cards.length === 0 ? (
+          <div
+            className="pixel-card p-12 text-center"
+            style={{
+              background: "#E8F5E9",
+              border: "4px solid #2D5016",
+              boxShadow: "8px 8px 0px #1A3009",
+            }}
+          >
+            <p className="text-xl pixel-font" style={{ color: "#4A7C2A" }}>
+              ⚠ NO CARDS YET ⚠
+            </p>
+            <p className="text-sm pixel-font mt-2" style={{ color: "#4A7C2A" }}>
+              Create your first card above!
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="mb-6 flex justify-between items-center">
+              <h2
+                className="text-3xl font-bold pixel-font"
                 style={{
-                  background: "#FFF",
-                  border: "3px solid #2D5016",
-                  fontFamily: "monospace",
-                  fontSize: "14px",
-                  color: "#1A3009",
-                  boxShadow: "inset 3px 3px 0px rgba(45, 80, 22, 0.2)",
-                }}
-              />
-            </div>
-            <div>
-              <label
-                className="block text-sm font-bold mb-2 pixel-font"
-                style={{ color: "#2D5016" }}
-              >
-                INPUT (OPTIONAL):
-              </label>
-              <textarea
-                className="w-full px-4 py-3 pixel-input focus:outline-none"
-                rows="2"
-                placeholder="Any additional instructions or feedback for the AI..."
-                value={aiInput}
-                onChange={(e) => setAiInput(e.target.value)}
-                style={{
-                  background: "#FFF",
-                  border: "3px solid #2D5016",
-                  fontFamily: "monospace",
-                  fontSize: "14px",
-                  color: "#1A3009",
-                  boxShadow: "inset 3px 3px 0px rgba(45, 80, 22, 0.2)",
-                }}
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleGenerateQuestions}
-                disabled={isGenerating || !aiCategory.trim()}
-                className="px-6 py-3 font-bold pixel-button transition-all active:scale-95 flex-1"
-                style={{
-                  background:
-                    isGenerating || !aiCategory.trim() ? "#9E9E9E" : "#9C27B0",
-                  color: "#FFF",
-                  border: "3px solid #2D5016",
-                  boxShadow: "4px 4px 0px #1A3009",
-                  fontFamily: "monospace",
-                  fontSize: "14px",
-                  textTransform: "uppercase",
-                  cursor:
-                    isGenerating || !aiCategory.trim()
-                      ? "not-allowed"
-                      : "pointer",
-                  opacity: isGenerating || !aiCategory.trim() ? 0.6 : 1,
+                  color: "#2D5016",
+                  textShadow: "2px 2px 0px #1A3009",
                 }}
               >
-                {isGenerating ? "⏳ GENERATING..." : "✨ GENERATE QUESTIONS"}
-              </button>
-              {(rejectedQuestions[aiCategory.trim() || "Uncategorized"] || [])
-                .length > 0 && (
+                CARDS: {cards.length}
+              </h2>
+              <div className="flex gap-2">
                 <button
-                  onClick={handleClearFeedback}
-                  className="px-4 py-3 font-bold pixel-button transition-all active:scale-95"
+                  onClick={handleOpenFullScreen}
+                  disabled={cards.length === 0}
+                  className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
                   style={{
-                    background: "#FF9800",
+                    background: cards.length === 0 ? "#9E9E9E" : "#00BCD4",
                     color: "#FFF",
                     border: "3px solid #2D5016",
-                    boxShadow: "4px 4px 0px #1A3009",
+                    boxShadow: "3px 3px 0px #1A3009",
+                    fontFamily: "monospace",
+                    fontSize: "12px",
+                    textTransform: "uppercase",
+                    cursor: cards.length === 0 ? "not-allowed" : "pointer",
+                    opacity: cards.length === 0 ? 0.6 : 1,
+                  }}
+                >
+                  🎲 FULL SCREEN
+                </button>
+                <label
+                  className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm cursor-pointer"
+                  style={{
+                    background: "#9C27B0",
+                    color: "#FFF",
+                    border: "3px solid #2D5016",
+                    boxShadow: "3px 3px 0px #1A3009",
                     fontFamily: "monospace",
                     fontSize: "12px",
                     textTransform: "uppercase",
                   }}
                 >
-                  🗑 CLEAR FEEDBACK
-                </button>
-              )}
-            </div>
-
-            {generatedQuestions.length > 0 && (
-              <div className="mt-6 space-y-4">
-                <h3
-                  className="text-xl font-bold pixel-font"
-                  style={{ color: "#2D5016" }}
+                  📥 IMPORT
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportCards}
+                    style={{ display: "none" }}
+                  />
+                </label>
+                <button
+                  onClick={handleExportCards}
+                  className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+                  style={{
+                    background: "#FF9800",
+                    color: "#FFF",
+                    border: "3px solid #2D5016",
+                    boxShadow: "3px 3px 0px #1A3009",
+                    fontFamily: "monospace",
+                    fontSize: "12px",
+                    textTransform: "uppercase",
+                  }}
                 >
-                  GENERATED QUESTIONS ({generatedQuestions.length}):
-                </h3>
-                {generatedQuestions.map((item, index) => (
-                  <div
-                    key={index}
-                    className="p-4"
-                    style={{
-                      background: "#FFF9C4",
-                      border: "3px solid #2D5016",
-                      boxShadow: "3px 3px 0px #1A3009",
-                      transition: "all 0.3s ease",
-                      opacity: keepingCardIndex === index ? 0 : 1,
-                      transform:
-                        keepingCardIndex === index
-                          ? "scale(0.8) translateY(-20px)"
-                          : "scale(1) translateY(0)",
-                    }}
-                  >
-                    <div className="mb-3">
-                      <div
-                        className="text-sm font-bold pixel-font mb-1"
-                        style={{ color: "#2D5016" }}
-                      >
-                        Q:
-                      </div>
-                      <div
-                        className="text-sm markdown-content"
-                        style={{
-                          color: "#1A3009",
-                          fontFamily: "monospace",
-                          marginBottom: "8px",
-                        }}
-                        dangerouslySetInnerHTML={{
-                          __html:
-                            typeof marked !== "undefined"
-                              ? marked.parse(item.question || "")
-                              : (item.question || "").replace(/\n/g, "<br/>"),
-                        }}
-                      />
-                    </div>
-                    <div className="mb-3">
-                      <div
-                        className="text-sm font-bold pixel-font mb-1"
-                        style={{ color: "#2D5016" }}
-                      >
-                        A:
-                      </div>
-                      <div
-                        className="text-sm markdown-content"
-                        style={{
-                          color: "#1A3009",
-                          fontFamily: "monospace",
-                        }}
-                        dangerouslySetInnerHTML={{
-                          __html:
-                            typeof marked !== "undefined"
-                              ? marked.parse(item.answer || "")
-                              : (item.answer || "").replace(/\n/g, "<br/>"),
-                        }}
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() =>
-                          handleRejectQuestion(
-                            item.question,
-                            item.answer,
-                            index,
-                            "too-easy"
-                          )
-                        }
-                        className="flex-1 px-3 py-2 font-bold pixel-button text-xs"
-                        style={{
-                          background: "#FF9800",
-                          color: "#FFF",
-                          border: "2px solid #2D5016",
-                          boxShadow: "2px 2px 0px #1A3009",
-                          fontFamily: "monospace",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        ⬇ EASIER
-                      </button>
-                      <button
-                        onClick={() =>
-                          handleRejectQuestion(
-                            item.question,
-                            item.answer,
-                            index,
-                            "too-hard"
-                          )
-                        }
-                        className="flex-1 px-3 py-2 font-bold pixel-button text-xs"
-                        style={{
-                          background: "#9C27B0",
-                          color: "#FFF",
-                          border: "2px solid #2D5016",
-                          boxShadow: "2px 2px 0px #1A3009",
-                          fontFamily: "monospace",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        ⬆ HARDER
-                      </button>
-                      <button
-                        onClick={() =>
-                          handleKeepQuestion(item.question, item.answer, index)
-                        }
-                        className="flex-1 px-3 py-2 font-bold pixel-button text-xs"
-                        style={{
-                          background: "#4CAF50",
-                          color: "#FFF",
-                          border: "2px solid #2D5016",
-                          boxShadow: "2px 2px 0px #1A3009",
-                          fontFamily: "monospace",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        ✓ KEEP
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  📤 EXPORT
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm("Delete all cards?")) {
+                      setCards([]);
+                      setFlippedCards(new Set());
+                    }
+                  }}
+                  className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+                  style={{
+                    background: "#F44336",
+                    color: "#FFF",
+                    border: "3px solid #2D5016",
+                    boxShadow: "3px 3px 0px #1A3009",
+                    fontFamily: "monospace",
+                    fontSize: "12px",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  🗑 CLEAR ALL
+                </button>
               </div>
-            )}
-          </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {cards.map((card) => (
+                <TriviaCard
+                  key={card.id}
+                  card={card}
+                  allCards={cards}
+                  isFlipped={flippedCards.has(card.id)}
+                  onFlip={() => toggleFlip(card.id)}
+                  onEdit={() => handleStartEdit(card.id)}
+                  onDelete={() => handleDeleteCard(card.id)}
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
-
-      {cards.length === 0 ? (
-        <div
-          className="pixel-card p-12 text-center"
-          style={{
-            background: "#E8F5E9",
-            border: "4px solid #2D5016",
-            boxShadow: "8px 8px 0px #1A3009",
-          }}
-        >
-          <p className="text-xl pixel-font" style={{ color: "#4A7C2A" }}>
-            ⚠ NO CARDS YET ⚠
-          </p>
-          <p className="text-sm pixel-font mt-2" style={{ color: "#4A7C2A" }}>
-            Create your first card above!
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="mb-6 flex justify-between items-center">
-            <h2
-              className="text-3xl font-bold pixel-font"
-              style={{
-                color: "#2D5016",
-                textShadow: "2px 2px 0px #1A3009",
-              }}
-            >
-              CARDS: {cards.length}
-            </h2>
-            <div className="flex gap-2">
-              <label
-                className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm cursor-pointer"
-                style={{
-                  background: "#9C27B0",
-                  color: "#FFF",
-                  border: "3px solid #2D5016",
-                  boxShadow: "3px 3px 0px #1A3009",
-                  fontFamily: "monospace",
-                  fontSize: "12px",
-                  textTransform: "uppercase",
-                }}
-              >
-                📥 IMPORT
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleImportCards}
-                  style={{ display: "none" }}
-                />
-              </label>
-              <button
-                onClick={handleExportCards}
-                className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
-                style={{
-                  background: "#FF9800",
-                  color: "#FFF",
-                  border: "3px solid #2D5016",
-                  boxShadow: "3px 3px 0px #1A3009",
-                  fontFamily: "monospace",
-                  fontSize: "12px",
-                  textTransform: "uppercase",
-                }}
-              >
-                📤 EXPORT
-              </button>
-              <button
-                onClick={() => {
-                  if (confirm("Delete all cards?")) {
-                    setCards([]);
-                    setFlippedCards(new Set());
-                  }
-                }}
-                className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
-                style={{
-                  background: "#F44336",
-                  color: "#FFF",
-                  border: "3px solid #2D5016",
-                  boxShadow: "3px 3px 0px #1A3009",
-                  fontFamily: "monospace",
-                  fontSize: "12px",
-                  textTransform: "uppercase",
-                }}
-              >
-                🗑 CLEAR ALL
-              </button>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {cards.map((card) => (
-              <TriviaCard
-                key={card.id}
-                card={card}
-                allCards={cards}
-                isFlipped={flippedCards.has(card.id)}
-                onFlip={() => toggleFlip(card.id)}
-                onEdit={() => handleStartEdit(card.id)}
-                onDelete={() => handleDeleteCard(card.id)}
-              />
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+    </>
   );
 }
 
@@ -1174,7 +1563,7 @@ function TriviaCard({ card, allCards, isFlipped, onFlip, onEdit, onDelete }) {
         e.currentTarget.style.boxShadow = "6px 6px 0px #1A3009";
       }}
     >
-      <div className="relative h-56" style={{ perspective: "1000px" }}>
+      <div className="relative h-80" style={{ perspective: "1000px" }}>
         <div
           className="relative w-full h-full transition-transform duration-500"
           style={{
