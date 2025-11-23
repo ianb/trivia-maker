@@ -1609,14 +1609,17 @@ function TriviaMaker() {
           );
           const numPages = Math.ceil(selectedCardsList.length / 6);
 
-          return Array.from({ length: numPages }, (_, pageIndex) => {
+          // Interleave questions and answers: Q1, A1, Q2, A2, etc.
+          const pages = [];
+          for (let pageIndex = 0; pageIndex < numPages; pageIndex++) {
             const startIndex = pageIndex * 6;
             const pageCards = selectedCardsList.slice(
               startIndex,
               startIndex + 6
             );
 
-            return (
+            // Question page
+            pages.push(
               <div
                 key={`questions-${pageIndex}`}
                 className="print-page print-questions"
@@ -1652,23 +1655,9 @@ function TriviaMaker() {
                 </div>
               </div>
             );
-          });
-        })()}
 
-        {(() => {
-          const selectedCardsList = cards.filter((card) =>
-            selectedCards.has(card.id)
-          );
-          const numPages = Math.ceil(selectedCardsList.length / 6);
-
-          return Array.from({ length: numPages }, (_, pageIndex) => {
-            const startIndex = pageIndex * 6;
-            const pageCards = selectedCardsList.slice(
-              startIndex,
-              startIndex + 6
-            );
-
-            return (
+            // Answer page (immediately after question page)
+            pages.push(
               <div
                 key={`answers-${pageIndex}`}
                 className="print-page print-answers"
@@ -1693,7 +1682,9 @@ function TriviaMaker() {
                 </div>
               </div>
             );
-          });
+          }
+
+          return pages;
         })()}
       </div>
     </React.Fragment>
