@@ -1,0 +1,422 @@
+const { useState, useEffect } = React;
+
+function TriviaMaker() {
+  const [cards, setCards] = useState([]);
+  const [editingId, setEditingId] = useState(null);
+  const [newQuestion, setNewQuestion] = useState("");
+  const [newAnswer, setNewAnswer] = useState("");
+  const [flippedCards, setFlippedCards] = useState(new Set());
+
+  // Load cards from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("triviaCards");
+    if (saved) {
+      try {
+        setCards(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to load cards:", e);
+      }
+    }
+  }, []);
+
+  // Save cards to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem("triviaCards", JSON.stringify(cards));
+  }, [cards]);
+
+  function handleAddCard() {
+    if (newQuestion.trim() && newAnswer.trim()) {
+      const newCard = {
+        id: Date.now(),
+        question: newQuestion.trim(),
+        answer: newAnswer.trim(),
+      };
+      setCards([...cards, newCard]);
+      setNewQuestion("");
+      setNewAnswer("");
+    }
+  }
+
+  function handleDeleteCard(id) {
+    setCards(cards.filter((card) => card.id !== id));
+    setFlippedCards((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function handleStartEdit(id) {
+    const card = cards.find((c) => c.id === id);
+    if (card) {
+      setEditingId(id);
+      setNewQuestion(card.question);
+      setNewAnswer(card.answer);
+    }
+  }
+
+  function handleSaveEdit() {
+    if (editingId && newQuestion.trim() && newAnswer.trim()) {
+      setCards(
+        cards.map((card) =>
+          card.id === editingId
+            ? {
+                ...card,
+                question: newQuestion.trim(),
+                answer: newAnswer.trim(),
+              }
+            : card
+        )
+      );
+      setEditingId(null);
+      setNewQuestion("");
+      setNewAnswer("");
+    }
+  }
+
+  function handleCancelEdit() {
+    setEditingId(null);
+    setNewQuestion("");
+    setNewAnswer("");
+  }
+
+  function toggleFlip(id) {
+    setFlippedCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <header className="mb-8 text-center">
+        <h1 className="text-6xl font-bold mb-3 pixel-font" style={{
+          color: '#2D5016',
+          textShadow: '4px 4px 0px #1A3009, 8px 8px 0px rgba(0,0,0,0.1)',
+          letterSpacing: '2px'
+        }}>
+          TRIVIA MAKER
+        </h1>
+        <p className="text-xl pixel-font" style={{ color: '#4A7C2A' }}>
+          ▓▓▓ CREATE CARDS ▓▓▓
+        </p>
+      </header>
+
+      <div className="pixel-card p-6 mb-8" style={{
+        background: '#E8F5E9',
+        border: '4px solid #2D5016',
+        boxShadow: '8px 8px 0px #1A3009'
+      }}>
+        <h2 className="text-3xl font-bold mb-5 pixel-font" style={{
+          color: '#2D5016',
+          textShadow: '2px 2px 0px #1A3009'
+        }}>
+          {editingId ? "✎ EDIT CARD" : "➕ NEW CARD"}
+        </h2>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold mb-2 pixel-font" style={{ color: '#2D5016' }}>
+              QUESTION:
+            </label>
+            <textarea
+              className="w-full px-4 py-3 pixel-input focus:outline-none"
+              rows="3"
+              placeholder="Type your question here..."
+              value={newQuestion}
+              onChange={(e) => setNewQuestion(e.target.value)}
+              style={{
+                background: '#FFF',
+                border: '3px solid #2D5016',
+                fontFamily: 'monospace',
+                fontSize: '14px',
+                color: '#1A3009',
+                boxShadow: 'inset 3px 3px 0px rgba(45, 80, 22, 0.2)'
+              }}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2 pixel-font" style={{ color: '#2D5016' }}>
+              ANSWER:
+            </label>
+            <textarea
+              className="w-full px-4 py-3 pixel-input focus:outline-none"
+              rows="3"
+              placeholder="Type the answer here..."
+              value={newAnswer}
+              onChange={(e) => setNewAnswer(e.target.value)}
+              style={{
+                background: '#FFF',
+                border: '3px solid #2D5016',
+                fontFamily: 'monospace',
+                fontSize: '14px',
+                color: '#1A3009',
+                boxShadow: 'inset 3px 3px 0px rgba(45, 80, 22, 0.2)'
+              }}
+            />
+          </div>
+          <div className="flex gap-3">
+            {editingId ? (
+              <>
+                <button
+                  onClick={handleSaveEdit}
+                  className="px-6 py-3 font-bold pixel-button transition-all active:scale-95"
+                  style={{
+                    background: '#4CAF50',
+                    color: '#FFF',
+                    border: '3px solid #2D5016',
+                    boxShadow: '4px 4px 0px #1A3009',
+                    fontFamily: 'monospace',
+                    fontSize: '14px',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  ✓ SAVE
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="px-6 py-3 font-bold pixel-button transition-all active:scale-95"
+                  style={{
+                    background: '#FFC107',
+                    color: '#1A3009',
+                    border: '3px solid #2D5016',
+                    boxShadow: '4px 4px 0px #1A3009',
+                    fontFamily: 'monospace',
+                    fontSize: '14px',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  ✗ CANCEL
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleAddCard}
+                className="px-6 py-3 font-bold pixel-button transition-all active:scale-95"
+                style={{
+                  background: '#2196F3',
+                  color: '#FFF',
+                  border: '3px solid #2D5016',
+                  boxShadow: '4px 4px 0px #1A3009',
+                  fontFamily: 'monospace',
+                  fontSize: '14px',
+                  textTransform: 'uppercase'
+                }}
+              >
+                + ADD CARD
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {cards.length === 0 ? (
+        <div className="pixel-card p-12 text-center" style={{
+          background: '#E8F5E9',
+          border: '4px solid #2D5016',
+          boxShadow: '8px 8px 0px #1A3009'
+        }}>
+          <p className="text-xl pixel-font" style={{ color: '#4A7C2A' }}>
+            ⚠ NO CARDS YET ⚠
+          </p>
+          <p className="text-sm pixel-font mt-2" style={{ color: '#4A7C2A' }}>
+            Create your first card above!
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="mb-6 flex justify-between items-center">
+            <h2 className="text-3xl font-bold pixel-font" style={{
+              color: '#2D5016',
+              textShadow: '2px 2px 0px #1A3009'
+            }}>
+              CARDS: {cards.length}
+            </h2>
+            <button
+              onClick={() => {
+                if (confirm("Delete all cards?")) {
+                  setCards([]);
+                  setFlippedCards(new Set());
+                }
+              }}
+              className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+              style={{
+                background: '#F44336',
+                color: '#FFF',
+                border: '3px solid #2D5016',
+                boxShadow: '3px 3px 0px #1A3009',
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                textTransform: 'uppercase'
+              }}
+            >
+              🗑 CLEAR ALL
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {cards.map((card) => (
+              <TriviaCard
+                key={card.id}
+                card={card}
+                isFlipped={flippedCards.has(card.id)}
+                onFlip={() => toggleFlip(card.id)}
+                onEdit={() => handleStartEdit(card.id)}
+                onDelete={() => handleDeleteCard(card.id)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TriviaCard({ card, isFlipped, onFlip, onEdit, onDelete }) {
+  return (
+    <div className="pixel-card overflow-hidden" style={{
+      background: '#E8F5E9',
+      border: '4px solid #2D5016',
+      boxShadow: '6px 6px 0px #1A3009',
+      transition: 'transform 0.1s, box-shadow 0.1s'
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.transform = 'translateY(-2px)';
+      e.currentTarget.style.boxShadow = '8px 8px 0px #1A3009';
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.transform = 'translateY(0)';
+      e.currentTarget.style.boxShadow = '6px 6px 0px #1A3009';
+    }}
+    >
+      <div className="relative h-56" style={{ perspective: "1000px" }}>
+        <div
+          className="relative w-full h-full transition-transform duration-500"
+          style={{
+            transformStyle: "preserve-3d",
+            transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+          }}
+        >
+          {/* Question side */}
+          <div
+            className="absolute inset-0 w-full h-full"
+            style={{ backfaceVisibility: "hidden" }}
+          >
+            <div className="p-5 h-full flex flex-col" style={{
+              background: '#FFF9C4'
+            }}>
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-base font-bold text-center leading-relaxed pixel-font" style={{
+                  color: '#1A3009',
+                  fontFamily: 'monospace',
+                  fontSize: '16px',
+                  lineHeight: '1.6'
+                }}>
+                  {card.question}
+                </p>
+              </div>
+              <div className="mt-auto pt-3 border-t-4" style={{ borderColor: '#2D5016' }}>
+                <button
+                  onClick={onFlip}
+                  className="w-full px-4 py-2.5 font-bold pixel-button transition-all active:scale-95"
+                  style={{
+                    background: '#2196F3',
+                    color: '#FFF',
+                    border: '3px solid #2D5016',
+                    boxShadow: '3px 3px 0px #1A3009',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  👁 SHOW ANSWER
+                </button>
+              </div>
+            </div>
+          </div>
+          {/* Answer side */}
+          <div
+            className="absolute inset-0 w-full h-full"
+            style={{
+              backfaceVisibility: "hidden",
+              transform: "rotateY(180deg)",
+            }}
+          >
+            <div className="p-5 h-full flex flex-col" style={{
+              background: '#C8E6C9'
+            }}>
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-base font-bold text-center leading-relaxed pixel-font" style={{
+                  color: '#1A3009',
+                  fontFamily: 'monospace',
+                  fontSize: '16px',
+                  lineHeight: '1.6'
+                }}>
+                  {card.answer}
+                </p>
+              </div>
+              <div className="mt-auto pt-3 border-t-4" style={{ borderColor: '#2D5016' }}>
+                <button
+                  onClick={onFlip}
+                  className="w-full px-4 py-2.5 font-bold pixel-button transition-all active:scale-95 mb-2"
+                  style={{
+                    background: '#FFC107',
+                    color: '#1A3009',
+                    border: '3px solid #2D5016',
+                    boxShadow: '3px 3px 0px #1A3009',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  ← BACK
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="p-3 flex gap-2" style={{
+        background: '#C8E6C9',
+        borderTop: '4px solid #2D5016'
+      }}>
+        <button
+          onClick={onEdit}
+          className="flex-1 px-3 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+          style={{
+            background: '#FFC107',
+            color: '#1A3009',
+            border: '3px solid #2D5016',
+            boxShadow: '2px 2px 0px #1A3009',
+            fontFamily: 'monospace',
+            fontSize: '11px',
+            textTransform: 'uppercase'
+          }}
+        >
+          ✎ EDIT
+        </button>
+        <button
+          onClick={onDelete}
+          className="flex-1 px-3 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+          style={{
+            background: '#F44336',
+            color: '#FFF',
+            border: '3px solid #2D5016',
+            boxShadow: '2px 2px 0px #1A3009',
+            fontFamily: 'monospace',
+            fontSize: '11px',
+            textTransform: 'uppercase'
+          }}
+        >
+          🗑 DELETE
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<TriviaMaker />);

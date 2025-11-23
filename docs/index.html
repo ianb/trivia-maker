@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trivia Maker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap");
+
+      body {
+        background: #a8d5ba;
+        background-image: repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 0, 0, 0.03) 2px,
+            rgba(0, 0, 0, 0.03) 4px
+          ),
+          repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 0, 0, 0.03) 2px,
+            rgba(0, 0, 0, 0.03) 4px
+          );
+        min-height: 100vh;
+        image-rendering: pixelated;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: crisp-edges;
+      }
+
+      .pixel-font {
+        font-family: "Press Start 2P", monospace;
+        image-rendering: pixelated;
+      }
+
+      .pixel-card {
+        image-rendering: pixelated;
+      }
+
+      .pixel-button {
+        image-rendering: pixelated;
+        cursor: pointer;
+      }
+
+      .pixel-button:hover {
+        transform: translate(2px, 2px);
+        box-shadow: 2px 2px 0px #1a3009 !important;
+      }
+
+      .pixel-button:active {
+        transform: translate(4px, 4px);
+        box-shadow: 1px 1px 0px #1a3009 !important;
+      }
+
+      .pixel-input {
+        image-rendering: pixelated;
+      }
+
+      .pixel-input:focus {
+        outline: none;
+        box-shadow: inset 4px 4px 0px rgba(45, 80, 22, 0.3) !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Load and transform the external JSX file
+      fetch("app.js")
+        .then((response) => response.text())
+        .then((code) => {
+          const transformed = Babel.transform(code, {
+            presets: ["react"],
+          }).code;
+          eval(transformed);
+        })
+        .catch((err) => console.error("Error loading app.js:", err));
+    </script>
+  </body>
+</html>
