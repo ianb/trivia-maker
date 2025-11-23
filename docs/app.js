@@ -22,6 +22,7 @@ function TriviaMaker() {
   const [showFullScreenAnswer, setShowFullScreenAnswer] = useState(false);
   const [selectedCards, setSelectedCards] = useState(new Set());
   const [printMode, setPrintMode] = useState(false);
+  const [viewMode, setViewMode] = useState("grid"); // "grid" or "table"
 
   // Helper function to generate random string
   function generateRandomString(length) {
@@ -1452,22 +1453,44 @@ function TriviaMaker() {
             </div>
           ) : (
             <>
-              <div className="mb-6 flex justify-between items-center">
-                <h2
-                  className="text-3xl font-bold pixel-font"
-                  style={{
-                    color: "#2D5016",
-                    textShadow: "2px 2px 0px #1A3009",
-                  }}
-                >
-                  CARDS: {cards.length}
-                  {selectedCards.size > 0 && (
-                    <span className="text-lg ml-2" style={{ color: "#4A7C2A" }}>
-                      ({selectedCards.size} selected)
-                    </span>
-                  )}
-                </h2>
-                <div className="flex gap-2">
+              <div className="mb-6">
+                <div className="mb-3">
+                  <h2
+                    className="text-3xl font-bold pixel-font"
+                    style={{
+                      color: "#2D5016",
+                      textShadow: "2px 2px 0px #1A3009",
+                    }}
+                  >
+                    CARDS: {cards.length}
+                    {selectedCards.size > 0 && (
+                      <span
+                        className="text-lg ml-2"
+                        style={{ color: "#4A7C2A" }}
+                      >
+                        ({selectedCards.size} selected)
+                      </span>
+                    )}
+                  </h2>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() =>
+                      setViewMode(viewMode === "grid" ? "table" : "grid")
+                    }
+                    className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+                    style={{
+                      background: "#673AB7",
+                      color: "#FFF",
+                      border: "3px solid #2D5016",
+                      boxShadow: "3px 3px 0px #1A3009",
+                      fontFamily: "monospace",
+                      fontSize: "12px",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {viewMode === "grid" ? "📋 TABLE VIEW" : "🎴 CARD VIEW"}
+                  </button>
                   <button
                     onClick={handleSelectAll}
                     disabled={cards.length === 0}
@@ -1583,21 +1606,240 @@ function TriviaMaker() {
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {cards.map((card) => (
-                  <TriviaCard
-                    key={card.id}
-                    card={card}
-                    allCards={cards}
-                    isFlipped={flippedCards.has(card.id)}
-                    onFlip={() => toggleFlip(card.id)}
-                    onEdit={() => handleStartEdit(card.id)}
-                    onDelete={() => handleDeleteCard(card.id)}
-                    isSelected={selectedCards.has(card.id)}
-                    onToggleSelect={() => handleToggleCardSelection(card.id)}
-                  />
-                ))}
-              </div>
+
+              {viewMode === "grid" ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {cards.map((card) => (
+                    <TriviaCard
+                      key={card.id}
+                      card={card}
+                      allCards={cards}
+                      isFlipped={flippedCards.has(card.id)}
+                      onFlip={() => toggleFlip(card.id)}
+                      onEdit={() => handleStartEdit(card.id)}
+                      onDelete={() => handleDeleteCard(card.id)}
+                      isSelected={selectedCards.has(card.id)}
+                      onToggleSelect={() => handleToggleCardSelection(card.id)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div
+                  className="overflow-x-auto"
+                  style={{
+                    background: "#E8F5E9",
+                    border: "4px solid #2D5016",
+                    boxShadow: "8px 8px 0px #1A3009",
+                  }}
+                >
+                  <table
+                    className="w-full"
+                    style={{
+                      fontFamily: "sans-serif",
+                      borderCollapse: "collapse",
+                    }}
+                  >
+                    <thead>
+                      <tr
+                        style={{
+                          background: "#2D5016",
+                          color: "#FFF",
+                        }}
+                      >
+                        <th
+                          style={{
+                            padding: "12px",
+                            textAlign: "left",
+                            border: "2px solid #1A3009",
+                            fontWeight: "bold",
+                            fontSize: "14px",
+                          }}
+                        >
+                          ☑
+                        </th>
+                        <th
+                          style={{
+                            padding: "12px",
+                            textAlign: "left",
+                            border: "2px solid #1A3009",
+                            fontWeight: "bold",
+                            fontSize: "14px",
+                          }}
+                        >
+                          Category
+                        </th>
+                        <th
+                          style={{
+                            padding: "12px",
+                            textAlign: "left",
+                            border: "2px solid #1A3009",
+                            fontWeight: "bold",
+                            fontSize: "14px",
+                          }}
+                        >
+                          Question
+                        </th>
+                        <th
+                          style={{
+                            padding: "12px",
+                            textAlign: "left",
+                            border: "2px solid #1A3009",
+                            fontWeight: "bold",
+                            fontSize: "14px",
+                          }}
+                        >
+                          Answer
+                        </th>
+                        <th
+                          style={{
+                            padding: "12px",
+                            textAlign: "center",
+                            border: "2px solid #1A3009",
+                            fontWeight: "bold",
+                            fontSize: "14px",
+                            width: "100px",
+                          }}
+                        >
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cards.map((card, index) => {
+                        const categoryColor = getCategoryColor(
+                          card.category,
+                          cards
+                        );
+                        return (
+                          <tr
+                            key={card.id}
+                            style={{
+                              background: index % 2 === 0 ? "#FFF" : "#F5F5F5",
+                              borderBottom: "1px solid #2D5016",
+                            }}
+                          >
+                            <td
+                              style={{
+                                padding: "12px",
+                                border: "1px solid #2D5016",
+                                textAlign: "center",
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedCards.has(card.id)}
+                                onChange={() =>
+                                  handleToggleCardSelection(card.id)
+                                }
+                                style={{
+                                  width: "18px",
+                                  height: "18px",
+                                  cursor: "pointer",
+                                  accentColor: "#2196F3",
+                                }}
+                              />
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                border: "1px solid #2D5016",
+                                fontWeight: "bold",
+                                fontSize: "12px",
+                                background: categoryColor.bg,
+                                color: categoryColor.text,
+                              }}
+                            >
+                              {card.category || "Uncategorized"}
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                border: "1px solid #2D5016",
+                                fontSize: "14px",
+                                color: "#1A3009",
+                              }}
+                            >
+                              <div
+                                className="markdown-content"
+                                style={{
+                                  fontFamily: "sans-serif",
+                                }}
+                                dangerouslySetInnerHTML={{
+                                  __html:
+                                    typeof marked !== "undefined"
+                                      ? marked.parse(card.question)
+                                      : card.question.replace(/\n/g, "<br/>"),
+                                }}
+                              />
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                border: "1px solid #2D5016",
+                                fontSize: "14px",
+                                color: "#1A3009",
+                              }}
+                            >
+                              <div
+                                className="markdown-content"
+                                style={{
+                                  fontFamily: "sans-serif",
+                                }}
+                                dangerouslySetInnerHTML={{
+                                  __html:
+                                    typeof marked !== "undefined"
+                                      ? marked.parse(card.answer)
+                                      : card.answer.replace(/\n/g, "<br/>"),
+                                }}
+                              />
+                            </td>
+                            <td
+                              style={{
+                                padding: "8px",
+                                border: "1px solid #2D5016",
+                                textAlign: "center",
+                              }}
+                            >
+                              <div className="flex gap-2 justify-center">
+                                <button
+                                  onClick={() => handleStartEdit(card.id)}
+                                  className="px-3 py-1 font-bold transition-all active:scale-95 text-xs"
+                                  style={{
+                                    background: "#FFC107",
+                                    color: "#1A3009",
+                                    border: "2px solid #2D5016",
+                                    boxShadow: "2px 2px 0px #1A3009",
+                                    fontFamily: "sans-serif",
+                                    fontSize: "11px",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  ✎ Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCard(card.id)}
+                                  className="px-3 py-1 font-bold transition-all active:scale-95 text-xs"
+                                  style={{
+                                    background: "#F44336",
+                                    color: "#FFF",
+                                    border: "2px solid #2D5016",
+                                    boxShadow: "2px 2px 0px #1A3009",
+                                    fontFamily: "sans-serif",
+                                    fontSize: "11px",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  🗑 Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </>
           )}
         </div>
