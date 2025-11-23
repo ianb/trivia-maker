@@ -5,12 +5,15 @@ function TriviaMaker() {
   const [editingId, setEditingId] = useState(null);
   const [newQuestion, setNewQuestion] = useState("");
   const [newAnswer, setNewAnswer] = useState("");
+  const [newCategory, setNewCategory] = useState("");
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [flippedCards, setFlippedCards] = useState(new Set());
   const [openRouterToken, setOpenRouterToken] = useState("");
   const [activeTab, setActiveTab] = useState("manual");
   const [aiCategory, setAiCategory] = useState("");
   const [generatedQuestions, setGeneratedQuestions] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [keepingCardIndex, setKeepingCardIndex] = useState(null);
 
   // Helper function to generate random string
   function generateRandomString(length) {
@@ -135,10 +138,12 @@ function TriviaMaker() {
         id: Date.now(),
         question: newQuestion.trim(),
         answer: newAnswer.trim(),
+        category: newCategory.trim() || "Uncategorized",
       };
       setCards([...cards, newCard]);
       setNewQuestion("");
       setNewAnswer("");
+      setNewCategory("");
     }
   }
 
@@ -157,6 +162,7 @@ function TriviaMaker() {
       setEditingId(id);
       setNewQuestion(card.question);
       setNewAnswer(card.answer);
+      setNewCategory(card.category || "");
     }
   }
 
@@ -169,6 +175,7 @@ function TriviaMaker() {
                 ...card,
                 question: newQuestion.trim(),
                 answer: newAnswer.trim(),
+                category: newCategory.trim() || "Uncategorized",
               }
             : card
         )
@@ -176,6 +183,7 @@ function TriviaMaker() {
       setEditingId(null);
       setNewQuestion("");
       setNewAnswer("");
+      setNewCategory("");
     }
   }
 
@@ -183,6 +191,7 @@ function TriviaMaker() {
     setEditingId(null);
     setNewQuestion("");
     setNewAnswer("");
+    setNewCategory("");
   }
 
   function toggleFlip(id) {
@@ -207,6 +216,7 @@ function TriviaMaker() {
       triviaQuestions: cards.map((card) => ({
         question: card.question,
         answer: card.answer,
+        category: card.category || "Uncategorized",
       })),
     };
 
@@ -235,6 +245,7 @@ function TriviaMaker() {
             id: Date.now() + index,
             question: item.question || "",
             answer: item.answer || "",
+            category: item.category || "Uncategorized",
           }));
 
           if (
@@ -268,11 +279,43 @@ function TriviaMaker() {
 
     try {
       const requestBody = {
-        model: "openai/gpt-4o", // User requested gpt-5.1, but using gpt-4o as fallback
+        model: "openai/gpt-5.1",
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "trivia_questions",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                questions: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      question: {
+                        type: "string",
+                        description: "The trivia question",
+                      },
+                      answer: {
+                        type: "string",
+                        description: "The answer to the trivia question",
+                      },
+                    },
+                    required: ["question", "answer"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ["questions"],
+              additionalProperties: false,
+            },
+          },
+        },
         messages: [
           {
             role: "user",
-            content: `Generate 5 trivia questions about "${aiCategory}". Return them as a JSON array where each item has "question" and "answer" fields. Format: [{"question": "...", "answer": "..."}, ...]`,
+            content: `Generate 5 trivia questions about "${aiCategory}".`,
           },
         ],
       };
@@ -297,27 +340,29 @@ function TriviaMaker() {
       }
 
       const data = await response.json();
-      console.log("LLM Response:", JSON.stringify(data, null, 2));
-
       const content = data.choices[0].message.content.trim();
 
-      // Try to extract JSON from the response
+      // Parse the structured JSON response
       let questions = [];
       try {
-        // Look for JSON array in the response
-        const jsonMatch = content.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          questions = JSON.parse(jsonMatch[0]);
-        } else {
-          // Try parsing the whole content
-          questions = JSON.parse(content);
-        }
+        const parsed = JSON.parse(content);
+        console.log(
+          "LLM Structured Response:",
+          JSON.stringify(parsed, null, 2)
+        );
 
-        if (!Array.isArray(questions)) {
-          throw new Error("Response is not an array");
+        // Extract questions from the structured response
+        if (parsed.questions && Array.isArray(parsed.questions)) {
+          questions = parsed.questions;
+        } else if (Array.isArray(parsed)) {
+          // Fallback: if it's directly an array
+          questions = parsed;
+        } else {
+          throw new Error("Response does not contain a questions array");
         }
       } catch (parseError) {
-        console.error("Failed to parse response:", parseError);
+        console.error("Failed to parse structured response:", parseError);
+        console.error("Raw content:", content);
         alert("Failed to parse AI response. Please try again.");
         setIsGenerating(false);
         return;
@@ -333,15 +378,33 @@ function TriviaMaker() {
   }
 
   function handleKeepQuestion(question, answer, index) {
-    const newCard = {
-      id: Date.now(),
-      question: question.trim(),
-      answer: answer.trim(),
-    };
-    setCards([...cards, newCard]);
-    // Remove the question from the generated list
-    setGeneratedQuestions((prev) => prev.filter((_, i) => i !== index));
+    // Add transition animation
+    setKeepingCardIndex(index);
+
+    setTimeout(() => {
+      const newCard = {
+        id: Date.now(),
+        question: question.trim(),
+        answer: answer.trim(),
+        category: aiCategory.trim() || "Uncategorized",
+      };
+      setCards([...cards, newCard]);
+      // Remove the question from the generated list
+      setGeneratedQuestions((prev) => prev.filter((_, i) => i !== index));
+      setKeepingCardIndex(null);
+    }, 300);
   }
+
+  // Get unique categories from existing cards, filtered by current input
+  const existingCategories = Array.from(
+    new Set(cards.map((card) => card.category).filter(Boolean))
+  )
+    .filter((cat) =>
+      newCategory.trim()
+        ? cat.toLowerCase().includes(newCategory.toLowerCase())
+        : true
+    )
+    .sort();
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl relative">
@@ -510,6 +573,67 @@ function TriviaMaker() {
                 }}
               />
             </div>
+            <div>
+              <label
+                className="block text-sm font-bold mb-2 pixel-font"
+                style={{ color: "#2D5016" }}
+              >
+                CATEGORY:
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  className="w-full px-4 py-3 pixel-input focus:outline-none"
+                  placeholder="Enter or select category..."
+                  value={newCategory}
+                  onChange={(e) => {
+                    setNewCategory(e.target.value);
+                    setShowCategoryDropdown(true);
+                  }}
+                  onFocus={() => setShowCategoryDropdown(true)}
+                  onBlur={() =>
+                    setTimeout(() => setShowCategoryDropdown(false), 200)
+                  }
+                  style={{
+                    background: "#FFF",
+                    border: "3px solid #2D5016",
+                    fontFamily: "monospace",
+                    fontSize: "14px",
+                    color: "#1A3009",
+                    boxShadow: "inset 3px 3px 0px rgba(45, 80, 22, 0.2)",
+                  }}
+                />
+                {showCategoryDropdown && existingCategories.length > 0 && (
+                  <div
+                    className="absolute z-10 w-full mt-1"
+                    style={{
+                      background: "#FFF",
+                      border: "3px solid #2D5016",
+                      boxShadow: "4px 4px 0px #1A3009",
+                      maxHeight: "200px",
+                      overflowY: "auto",
+                    }}
+                  >
+                    {existingCategories.map((cat) => (
+                      <div
+                        key={cat}
+                        onClick={() => {
+                          setNewCategory(cat);
+                          setShowCategoryDropdown(false);
+                        }}
+                        className="px-4 py-2 cursor-pointer hover:bg-gray-100 pixel-font text-sm"
+                        style={{
+                          color: "#1A3009",
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        {cat}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="flex gap-3">
               {editingId ? (
                 <>
@@ -635,6 +759,12 @@ function TriviaMaker() {
                       background: "#FFF9C4",
                       border: "3px solid #2D5016",
                       boxShadow: "3px 3px 0px #1A3009",
+                      transition: "all 0.3s ease",
+                      opacity: keepingCardIndex === index ? 0 : 1,
+                      transform:
+                        keepingCardIndex === index
+                          ? "scale(0.8) translateY(-20px)"
+                          : "scale(1) translateY(0)",
                     }}
                   >
                     <div className="mb-3">
@@ -808,7 +938,40 @@ function TriviaMaker() {
   );
 }
 
+// Helper function to generate a consistent color for a category
+function getCategoryColor(category) {
+  if (!category) return { bg: "#9E9E9E", text: "#FFF" };
+
+  // Generate a hash from the category string
+  let hash = 0;
+  for (let i = 0; i < category.length; i++) {
+    hash = category.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  // Generate a color palette with good contrast
+  const colors = [
+    { bg: "#8B4513", text: "#FFF" }, // Brown
+    { bg: "#4A148C", text: "#FFF" }, // Purple
+    { bg: "#00695C", text: "#FFF" }, // Teal
+    { bg: "#B71C1C", text: "#FFF" }, // Red
+    { bg: "#0D47A1", text: "#FFF" }, // Blue
+    { bg: "#1B5E20", text: "#FFF" }, // Green
+    { bg: "#E65100", text: "#FFF" }, // Orange
+    { bg: "#4A148C", text: "#FFF" }, // Deep Purple
+    { bg: "#880E4F", text: "#FFF" }, // Pink
+    { bg: "#1A237E", text: "#FFF" }, // Indigo
+    { bg: "#BF360C", text: "#FFF" }, // Deep Orange
+    { bg: "#004D40", text: "#FFF" }, // Dark Teal
+  ];
+
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+}
+
 function TriviaCard({ card, isFlipped, onFlip, onEdit, onDelete }) {
+  const categoryColor = getCategoryColor(card.category);
+  const category = card.category || "Uncategorized";
+
   return (
     <div
       className="pixel-card overflow-hidden"
@@ -841,12 +1004,23 @@ function TriviaCard({ card, isFlipped, onFlip, onEdit, onDelete }) {
             style={{ backfaceVisibility: "hidden" }}
           >
             <div
-              className="p-5 h-full flex flex-col"
+              className="h-full flex flex-col"
               style={{
                 background: "#FFF9C4",
               }}
             >
-              <div className="flex-1 flex items-center justify-center overflow-auto">
+              {/* Category Header */}
+              <div
+                className="px-3 py-2 text-center pixel-font text-xs font-bold"
+                style={{
+                  background: categoryColor.bg,
+                  color: categoryColor.text,
+                  borderBottom: "3px solid #2D5016",
+                }}
+              >
+                {category.toUpperCase()}
+              </div>
+              <div className="flex-1 flex items-center justify-center overflow-auto p-5">
                 <div
                   className="text-base text-center leading-relaxed markdown-content"
                   style={{
@@ -894,12 +1068,23 @@ function TriviaCard({ card, isFlipped, onFlip, onEdit, onDelete }) {
             }}
           >
             <div
-              className="p-5 h-full flex flex-col"
+              className="h-full flex flex-col"
               style={{
                 background: "#C8E6C9",
               }}
             >
-              <div className="flex-1 flex items-center justify-center overflow-auto">
+              {/* Category Header */}
+              <div
+                className="px-3 py-2 text-center pixel-font text-xs font-bold"
+                style={{
+                  background: categoryColor.bg,
+                  color: categoryColor.text,
+                  borderBottom: "3px solid #2D5016",
+                }}
+              >
+                {category.toUpperCase()}
+              </div>
+              <div className="flex-1 flex items-center justify-center overflow-auto p-5">
                 <div
                   className="text-base text-center leading-relaxed markdown-content"
                   style={{
