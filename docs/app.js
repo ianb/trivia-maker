@@ -196,6 +196,57 @@ function TriviaMaker() {
     setOpenRouterToken("");
   }
 
+  function handleExportCards() {
+    const exportData = {
+      triviaQuestions: cards.map(card => ({
+        question: card.question,
+        answer: card.answer
+      }))
+    };
+
+    const jsonString = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'trivia-cards.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function handleImportCards(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (data.triviaQuestions && Array.isArray(data.triviaQuestions)) {
+          const importedCards = data.triviaQuestions.map((item, index) => ({
+            id: Date.now() + index,
+            question: item.question || '',
+            answer: item.answer || ''
+          }));
+
+          if (confirm(`Import ${importedCards.length} card(s)? This will add them to your existing cards.`)) {
+            setCards([...cards, ...importedCards]);
+          }
+        } else {
+          alert('Invalid file format. Expected {"triviaQuestions": [...]}');
+        }
+      } catch (error) {
+        console.error('Error parsing JSON:', error);
+        alert('Failed to parse JSON file. Please check the file format.');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input so same file can be selected again
+    event.target.value = '';
+  }
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl relative">
       {/* OpenRouter Button - Top Right */}
@@ -275,7 +326,7 @@ function TriviaMaker() {
             <textarea
               className="w-full px-4 py-3 pixel-input focus:outline-none"
               rows="3"
-              placeholder="Type your question here..."
+              placeholder="Type your question here... (Markdown supported)"
               value={newQuestion}
               onChange={(e) => setNewQuestion(e.target.value)}
               style={{
@@ -295,7 +346,7 @@ function TriviaMaker() {
             <textarea
               className="w-full px-4 py-3 pixel-input focus:outline-none"
               rows="3"
-              placeholder="Type the answer here..."
+              placeholder="Type the answer here... (Markdown supported)"
               value={newAnswer}
               onChange={(e) => setNewAnswer(e.target.value)}
               style={{
@@ -385,26 +436,62 @@ function TriviaMaker() {
             }}>
               CARDS: {cards.length}
             </h2>
-            <button
-              onClick={() => {
-                if (confirm("Delete all cards?")) {
-                  setCards([]);
-                  setFlippedCards(new Set());
-                }
-              }}
-              className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
-              style={{
-                background: '#F44336',
-                color: '#FFF',
-                border: '3px solid #2D5016',
-                boxShadow: '3px 3px 0px #1A3009',
-                fontFamily: 'monospace',
-                fontSize: '12px',
-                textTransform: 'uppercase'
-              }}
-            >
-              🗑 CLEAR ALL
-            </button>
+            <div className="flex gap-2">
+              <label className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm cursor-pointer"
+                style={{
+                  background: '#9C27B0',
+                  color: '#FFF',
+                  border: '3px solid #2D5016',
+                  boxShadow: '3px 3px 0px #1A3009',
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  textTransform: 'uppercase'
+                }}
+              >
+                📥 IMPORT
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportCards}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              <button
+                onClick={handleExportCards}
+                className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+                style={{
+                  background: '#FF9800',
+                  color: '#FFF',
+                  border: '3px solid #2D5016',
+                  boxShadow: '3px 3px 0px #1A3009',
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  textTransform: 'uppercase'
+                }}
+              >
+                📤 EXPORT
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm("Delete all cards?")) {
+                    setCards([]);
+                    setFlippedCards(new Set());
+                  }
+                }}
+                className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+                style={{
+                  background: '#F44336',
+                  color: '#FFF',
+                  border: '3px solid #2D5016',
+                  boxShadow: '3px 3px 0px #1A3009',
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  textTransform: 'uppercase'
+                }}
+              >
+                🗑 CLEAR ALL
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {cards.map((card) => (
@@ -457,15 +544,21 @@ function TriviaCard({ card, isFlipped, onFlip, onEdit, onDelete }) {
             <div className="p-5 h-full flex flex-col" style={{
               background: '#FFF9C4'
             }}>
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-base font-bold text-center leading-relaxed pixel-font" style={{
-                  color: '#1A3009',
-                  fontFamily: 'monospace',
-                  fontSize: '16px',
-                  lineHeight: '1.6'
-                }}>
-                  {card.question}
-                </p>
+              <div className="flex-1 flex items-center justify-center overflow-auto">
+                <div
+                  className="text-base text-center leading-relaxed markdown-content"
+                  style={{
+                    color: '#1A3009',
+                    fontFamily: 'monospace',
+                    fontSize: '16px',
+                    lineHeight: '1.6'
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html: typeof marked !== 'undefined'
+                      ? marked.parse(card.question)
+                      : card.question.replace(/\n/g, '<br/>')
+                  }}
+                />
               </div>
               <div className="mt-auto pt-3 border-t-4" style={{ borderColor: '#2D5016' }}>
                 <button
@@ -497,15 +590,21 @@ function TriviaCard({ card, isFlipped, onFlip, onEdit, onDelete }) {
             <div className="p-5 h-full flex flex-col" style={{
               background: '#C8E6C9'
             }}>
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-base font-bold text-center leading-relaxed pixel-font" style={{
-                  color: '#1A3009',
-                  fontFamily: 'monospace',
-                  fontSize: '16px',
-                  lineHeight: '1.6'
-                }}>
-                  {card.answer}
-                </p>
+              <div className="flex-1 flex items-center justify-center overflow-auto">
+                <div
+                  className="text-base text-center leading-relaxed markdown-content"
+                  style={{
+                    color: '#1A3009',
+                    fontFamily: 'monospace',
+                    fontSize: '16px',
+                    lineHeight: '1.6'
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html: typeof marked !== 'undefined'
+                      ? marked.parse(card.answer)
+                      : card.answer.replace(/\n/g, '<br/>')
+                  }}
+                />
               </div>
               <div className="mt-auto pt-3 border-t-4" style={{ borderColor: '#2D5016' }}>
                 <button

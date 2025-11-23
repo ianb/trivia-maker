@@ -14,6 +14,7 @@
       src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
     ></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap");
 
@@ -70,6 +71,49 @@
       .pixel-input:focus {
         outline: none;
         box-shadow: inset 4px 4px 0px rgba(45, 80, 22, 0.3) !important;
+      }
+
+      .markdown-content {
+        max-width: 100%;
+      }
+
+      .markdown-content p {
+        margin: 0.5em 0;
+      }
+
+      .markdown-content p:first-child {
+        margin-top: 0;
+      }
+
+      .markdown-content p:last-child {
+        margin-bottom: 0;
+      }
+
+      .markdown-content strong {
+        font-weight: bold;
+      }
+
+      .markdown-content em {
+        font-style: italic;
+      }
+
+      .markdown-content code {
+        background: rgba(0, 0, 0, 0.1);
+        padding: 0.2em 0.4em;
+        border-radius: 2px;
+      }
+
+      .markdown-content pre {
+        background: rgba(0, 0, 0, 0.1);
+        padding: 0.5em;
+        border-radius: 4px;
+        overflow-x: auto;
+      }
+
+      .markdown-content ul,
+      .markdown-content ol {
+        text-align: left;
+        display: inline-block;
       }
     </style>
   </head>
