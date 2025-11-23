@@ -97,3 +97,132 @@ body {
   text-align: left;
   display: inline-block;
 }
+
+/* Print view - hidden on screen */
+.print-view {
+  display: none;
+}
+
+/* Print Styles */
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    background: white !important;
+    background-image: none !important;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Hide everything except print view */
+  #root > *:not(.print-view),
+  .pixel-card:not(.print-card),
+  button,
+  input[type="checkbox"],
+  input[type="file"],
+  label:has(input[type="file"]),
+  .no-print {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Show only print view */
+  .print-view {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  /* Print page setup */
+  .print-page {
+    page-break-after: always;
+    width: 100%;
+    min-height: 100vh;
+    padding: 15mm;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .print-page:last-child {
+    page-break-after: auto;
+  }
+
+  /* Grid layout for 6 cards per page (2 columns x 3 rows) */
+  .print-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: 10mm;
+    width: 100%;
+    flex: 1;
+    height: 100%;
+  }
+
+  /* Print card styling */
+  .print-card {
+    border: 2px solid #2d5016;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .print-card-question {
+    background: white !important;
+  }
+
+  .print-card-answer {
+    background: white !important;
+  }
+
+  .print-answer-header {
+    padding: 6px;
+    text-align: center;
+    font-family: "Press Start 2P", monospace;
+    font-size: 7px;
+    font-weight: bold;
+    background: black !important;
+    color: white !important;
+    border-bottom: 2px solid #2d5016;
+    flex-shrink: 0;
+  }
+
+  .print-category {
+    padding: 6px;
+    text-align: center;
+    font-family: "Press Start 2P", monospace;
+    font-size: 7px;
+    font-weight: bold;
+    border-bottom: 2px solid #2d5016;
+    flex-shrink: 0;
+  }
+
+  .print-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .print-content .markdown-content {
+    text-align: center;
+    font-family: monospace;
+    font-size: 11px;
+    line-height: 1.3;
+    color: #1a3009;
+    width: 100%;
+    max-height: 100%;
+    overflow: hidden;
+  }
+
+  .print-content .markdown-content p {
+    margin: 0.3em 0;
+  }
+}
