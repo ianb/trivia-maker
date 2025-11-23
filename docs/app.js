@@ -11,9 +11,11 @@ function TriviaMaker() {
   const [openRouterToken, setOpenRouterToken] = useState("");
   const [activeTab, setActiveTab] = useState("manual");
   const [aiCategory, setAiCategory] = useState("");
+  const [aiInput, setAiInput] = useState("");
   const [generatedQuestions, setGeneratedQuestions] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [keepingCardIndex, setKeepingCardIndex] = useState(null);
+  const [rejectedQuestions, setRejectedQuestions] = useState({}); // { category: [{question, answer, annotation}] }
 
   // Helper function to generate random string
   function generateRandomString(length) {
@@ -54,6 +56,14 @@ function TriviaMaker() {
     const savedToken = localStorage.getItem("openRouterToken");
     if (savedToken) {
       setOpenRouterToken(savedToken);
+    }
+    const savedRejected = localStorage.getItem("rejectedQuestions");
+    if (savedRejected) {
+      try {
+        setRejectedQuestions(JSON.parse(savedRejected));
+      } catch (e) {
+        console.error("Failed to load rejected questions:", e);
+      }
     }
 
     // Handle OAuth callback
@@ -131,6 +141,14 @@ function TriviaMaker() {
   useEffect(() => {
     localStorage.setItem("triviaCards", JSON.stringify(cards));
   }, [cards]);
+
+  // Save rejected questions to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(
+      "rejectedQuestions",
+      JSON.stringify(rejectedQuestions)
+    );
+  }, [rejectedQuestions]);
 
   function handleAddCard() {
     if (newQuestion.trim() && newAnswer.trim()) {
@@ -278,6 +296,43 @@ function TriviaMaker() {
     setGeneratedQuestions([]);
 
     try {
+      // Get existing questions in this category
+      const categoryCards = cards.filter(
+        (card) =>
+          (card.category || "Uncategorized") ===
+          (aiCategory.trim() || "Uncategorized")
+      );
+      const existingQuestionsText = categoryCards
+        .map((card) => `${card.question}: ${card.answer}`)
+        .join("\n");
+
+      // Get rejected questions for this category
+      const categoryKey = aiCategory.trim() || "Uncategorized";
+      const categoryRejected = rejectedQuestions[categoryKey] || [];
+      const rejectedText = categoryRejected
+        .map((rejected) => {
+          const tag =
+            rejected.annotation === "too-easy" ? "<too-easy>" : "<too-hard>";
+          return `${tag}\n${rejected.question}: ${rejected.answer}\n</${rejected.annotation}>`;
+        })
+        .join("\n\n");
+
+      // Build the prompt
+      let prompt = `Generate 5 trivia questions about "${aiCategory}".\n\n`;
+
+      if (existingQuestionsText) {
+        prompt += `Here are the existing questions in this category (try to make new kinds of questions different than these):\n${existingQuestionsText}\n\n`;
+      }
+
+      if (rejectedText) {
+        prompt += `Here are some questions that were rejected with feedback:\n${rejectedText}\n\n`;
+        prompt += `You may generate a similar question to those that were rejected, so long as you incorporate the feedback.\n\n`;
+      }
+
+      if (aiInput.trim()) {
+        prompt += `Additional instructions: ${aiInput.trim()}\n\n`;
+      }
+
       const requestBody = {
         model: "openai/gpt-5.1",
         response_format: {
@@ -314,8 +369,12 @@ function TriviaMaker() {
         },
         messages: [
           {
+            role: "system",
+            content: `You are a trivia question generator. You are making questions with compact questions and a canonical answer. Answers should be short and clear (though you may include an explanation in parenthesis if there are multiple possible answers)`,
+          },
+          {
             role: "user",
-            content: `Generate 5 trivia questions about "${aiCategory}".`,
+            content: prompt,
           },
         ],
       };
@@ -393,6 +452,35 @@ function TriviaMaker() {
       setGeneratedQuestions((prev) => prev.filter((_, i) => i !== index));
       setKeepingCardIndex(null);
     }, 300);
+  }
+
+  function handleRejectQuestion(question, answer, index, annotation) {
+    const categoryKey = aiCategory.trim() || "Uncategorized";
+    setRejectedQuestions((prev) => {
+      const categoryRejected = prev[categoryKey] || [];
+      return {
+        ...prev,
+        [categoryKey]: [
+          ...categoryRejected,
+          {
+            question: question.trim(),
+            answer: answer.trim(),
+            annotation: annotation,
+          },
+        ],
+      };
+    });
+    // Remove the question from the generated list
+    setGeneratedQuestions((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleClearFeedback() {
+    const categoryKey = aiCategory.trim() || "Uncategorized";
+    setRejectedQuestions((prev) => {
+      const updated = { ...prev };
+      delete updated[categoryKey];
+      return updated;
+    });
   }
 
   // Get unique categories from existing cards, filtered by current input
@@ -720,28 +808,71 @@ function TriviaMaker() {
                 }}
               />
             </div>
-            <button
-              onClick={handleGenerateQuestions}
-              disabled={isGenerating || !aiCategory.trim()}
-              className="px-6 py-3 font-bold pixel-button transition-all active:scale-95"
-              style={{
-                background:
-                  isGenerating || !aiCategory.trim() ? "#9E9E9E" : "#9C27B0",
-                color: "#FFF",
-                border: "3px solid #2D5016",
-                boxShadow: "4px 4px 0px #1A3009",
-                fontFamily: "monospace",
-                fontSize: "14px",
-                textTransform: "uppercase",
-                cursor:
-                  isGenerating || !aiCategory.trim()
-                    ? "not-allowed"
-                    : "pointer",
-                opacity: isGenerating || !aiCategory.trim() ? 0.6 : 1,
-              }}
-            >
-              {isGenerating ? "⏳ GENERATING..." : "✨ GENERATE QUESTIONS"}
-            </button>
+            <div>
+              <label
+                className="block text-sm font-bold mb-2 pixel-font"
+                style={{ color: "#2D5016" }}
+              >
+                INPUT (OPTIONAL):
+              </label>
+              <textarea
+                className="w-full px-4 py-3 pixel-input focus:outline-none"
+                rows="2"
+                placeholder="Any additional instructions or feedback for the AI..."
+                value={aiInput}
+                onChange={(e) => setAiInput(e.target.value)}
+                style={{
+                  background: "#FFF",
+                  border: "3px solid #2D5016",
+                  fontFamily: "monospace",
+                  fontSize: "14px",
+                  color: "#1A3009",
+                  boxShadow: "inset 3px 3px 0px rgba(45, 80, 22, 0.2)",
+                }}
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleGenerateQuestions}
+                disabled={isGenerating || !aiCategory.trim()}
+                className="px-6 py-3 font-bold pixel-button transition-all active:scale-95 flex-1"
+                style={{
+                  background:
+                    isGenerating || !aiCategory.trim() ? "#9E9E9E" : "#9C27B0",
+                  color: "#FFF",
+                  border: "3px solid #2D5016",
+                  boxShadow: "4px 4px 0px #1A3009",
+                  fontFamily: "monospace",
+                  fontSize: "14px",
+                  textTransform: "uppercase",
+                  cursor:
+                    isGenerating || !aiCategory.trim()
+                      ? "not-allowed"
+                      : "pointer",
+                  opacity: isGenerating || !aiCategory.trim() ? 0.6 : 1,
+                }}
+              >
+                {isGenerating ? "⏳ GENERATING..." : "✨ GENERATE QUESTIONS"}
+              </button>
+              {(rejectedQuestions[aiCategory.trim() || "Uncategorized"] || [])
+                .length > 0 && (
+                <button
+                  onClick={handleClearFeedback}
+                  className="px-4 py-3 font-bold pixel-button transition-all active:scale-95"
+                  style={{
+                    background: "#FF9800",
+                    color: "#FFF",
+                    border: "3px solid #2D5016",
+                    boxShadow: "4px 4px 0px #1A3009",
+                    fontFamily: "monospace",
+                    fontSize: "12px",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  🗑 CLEAR FEEDBACK
+                </button>
+              )}
+            </div>
 
             {generatedQuestions.length > 0 && (
               <div className="mt-6 space-y-4">
@@ -810,22 +941,66 @@ function TriviaMaker() {
                         }}
                       />
                     </div>
-                    <button
-                      onClick={() =>
-                        handleKeepQuestion(item.question, item.answer, index)
-                      }
-                      className="w-full px-4 py-2 font-bold pixel-button text-xs"
-                      style={{
-                        background: "#4CAF50",
-                        color: "#FFF",
-                        border: "2px solid #2D5016",
-                        boxShadow: "2px 2px 0px #1A3009",
-                        fontFamily: "monospace",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      ✓ KEEP THIS CARD
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() =>
+                          handleRejectQuestion(
+                            item.question,
+                            item.answer,
+                            index,
+                            "too-easy"
+                          )
+                        }
+                        className="flex-1 px-3 py-2 font-bold pixel-button text-xs"
+                        style={{
+                          background: "#FF9800",
+                          color: "#FFF",
+                          border: "2px solid #2D5016",
+                          boxShadow: "2px 2px 0px #1A3009",
+                          fontFamily: "monospace",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        ⬇ EASIER
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleRejectQuestion(
+                            item.question,
+                            item.answer,
+                            index,
+                            "too-hard"
+                          )
+                        }
+                        className="flex-1 px-3 py-2 font-bold pixel-button text-xs"
+                        style={{
+                          background: "#9C27B0",
+                          color: "#FFF",
+                          border: "2px solid #2D5016",
+                          boxShadow: "2px 2px 0px #1A3009",
+                          fontFamily: "monospace",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        ⬆ HARDER
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleKeepQuestion(item.question, item.answer, index)
+                        }
+                        className="flex-1 px-3 py-2 font-bold pixel-button text-xs"
+                        style={{
+                          background: "#4CAF50",
+                          color: "#FFF",
+                          border: "2px solid #2D5016",
+                          boxShadow: "2px 2px 0px #1A3009",
+                          fontFamily: "monospace",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        ✓ KEEP
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
