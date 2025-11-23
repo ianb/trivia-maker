@@ -24,6 +24,35 @@ function TriviaMaker() {
   const [printMode, setPrintMode] = useState(false);
   const [viewMode, setViewMode] = useState("grid"); // "grid" or "table"
   const [showAboutDialog, setShowAboutDialog] = useState(false);
+  const [showAnswersInTable, setShowAnswersInTable] = useState(false);
+
+  // Helper function to count words in text (strips markdown/html)
+  function countWords(text) {
+    if (!text) return 0;
+    // Strip markdown syntax first (basic patterns)
+    let plainText = text
+      .replace(/#{1,6}\s+/g, "") // Headers
+      .replace(/\*\*([^*]+)\*\*/g, "$1") // Bold
+      .replace(/\*([^*]+)\*/g, "$1") // Italic
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1") // Links
+      .replace(/`([^`]+)`/g, "$1") // Inline code
+      .replace(/```[\s\S]*?```/g, "") // Code blocks
+      .replace(/\n/g, " "); // Newlines to spaces
+
+    // If marked is available, parse and strip HTML
+    if (typeof marked !== "undefined") {
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = marked.parse(plainText);
+      plainText = tempDiv.textContent || tempDiv.innerText || "";
+    }
+
+    // Count words (split by whitespace and filter empty strings)
+    const words = plainText
+      .trim()
+      .split(/\s+/)
+      .filter((word) => word.length > 0);
+    return words.length;
+  }
 
   // Helper function to generate random string
   function generateRandomString(length) {
@@ -1852,9 +1881,31 @@ function TriviaMaker() {
                             border: "2px solid #1A3009",
                             fontWeight: "bold",
                             fontSize: "14px",
+                            width: "30%",
                           }}
                         >
-                          Answer
+                          <div className="flex items-center justify-between gap-2">
+                            <span>Answer</span>
+                            <button
+                              onClick={() =>
+                                setShowAnswersInTable(!showAnswersInTable)
+                              }
+                              className="px-2 py-1 font-bold pixel-button transition-all active:scale-95 text-xs"
+                              style={{
+                                background: showAnswersInTable
+                                  ? "#4CAF50"
+                                  : "#9E9E9E",
+                                color: "#FFF",
+                                border: "2px solid #FFF",
+                                boxShadow: "2px 2px 0px #1A3009",
+                                fontFamily: "monospace",
+                                fontSize: "10px",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              {showAnswersInTable ? "👁 HIDE" : "👁 SHOW"}
+                            </button>
+                          </div>
                         </th>
                         <th
                           style={{
@@ -1944,20 +1995,33 @@ function TriviaMaker() {
                                 border: "1px solid #2D5016",
                                 fontSize: "14px",
                                 color: "#1A3009",
+                                width: "30%",
                               }}
                             >
-                              <div
-                                className="markdown-content"
-                                style={{
-                                  fontFamily: "sans-serif",
-                                }}
-                                dangerouslySetInnerHTML={{
-                                  __html:
-                                    typeof marked !== "undefined"
-                                      ? marked.parse(card.answer)
-                                      : card.answer.replace(/\n/g, "<br/>"),
-                                }}
-                              />
+                              {showAnswersInTable ? (
+                                <div
+                                  className="markdown-content"
+                                  style={{
+                                    fontFamily: "sans-serif",
+                                  }}
+                                  dangerouslySetInnerHTML={{
+                                    __html:
+                                      typeof marked !== "undefined"
+                                        ? marked.parse(card.answer)
+                                        : card.answer.replace(/\n/g, "<br/>"),
+                                  }}
+                                />
+                              ) : (
+                                <div
+                                  style={{
+                                    fontFamily: "sans-serif",
+                                    color: "#757575",
+                                    fontStyle: "italic",
+                                  }}
+                                >
+                                  {countWords(card.answer)} words
+                                </div>
+                              )}
                             </td>
                             <td
                               style={{
