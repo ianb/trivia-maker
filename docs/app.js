@@ -623,7 +623,16 @@ function TriviaMaker() {
         messages: [
           {
             role: "system",
-            content: `You are a trivia question generator. You are making questions with compact questions and a canonical answer. Answers should be short and clear (though you may include an explanation in parenthesis if there are multiple possible answers)\n\nQuestions and answers may include Markdown formatting and emoji, but make them easy to read out loud.`,
+            content: `
+You are a trivia question generator. You are making questions with compact questions and a canonical answer. Answers should be short and clear (though you may include an explanation in parenthesis if there are multiple possible answers)
+
+Questions and answers may include Markdown formatting and emoji, but make them easy to read out loud.
+
+Question generation advice:
+1. The contestants will know the category, so the category cannot be the answer to the question
+2. Unlike category, contestants will NOT know any additional-user-instructions
+3. It should be clear early in the question what kind of answer you expect (e.g., when talking about music you should indicate if the expected answer is a song, artist, album, etc.)
+`.trim(),
           },
           {
             role: "user",
