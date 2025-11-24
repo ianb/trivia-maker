@@ -1,4 +1,4 @@
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
 
 function AuthForm({ onSignIn, onSignUp, error }) {
   const [username, setUsername] = useState("");
@@ -133,6 +133,8 @@ function TriviaMaker() {
   const [aiInput, setAiInput] = useState("");
   const [generatedQuestions, setGeneratedQuestions] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationElapsed, setGenerationElapsed] = useState(0);
+  const [longestGenerationTime, setLongestGenerationTime] = useState(0);
   const [keepingCardIndex, setKeepingCardIndex] = useState(null);
   const [rejectedQuestions, setRejectedQuestions] = useState({}); // { category: [{question, answer, annotation}] }
   const [fullScreenMode, setFullScreenMode] = useState(false);
@@ -148,6 +150,8 @@ function TriviaMaker() {
   const [isLoading, setIsLoading] = useState(true);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showLoginButton, setShowLoginButton] = useState(false);
+  const generationTimerRef = useRef(null);
+  const generationStartRef = useRef(null);
 
   // Helper function to count words in text (strips markdown/html)
   function countWords(text) {
@@ -226,6 +230,14 @@ function TriviaMaker() {
       }
     }
 
+    const savedLongestTime = localStorage.getItem("longestGenerationTime");
+    if (savedLongestTime) {
+      const parsedTime = parseInt(savedLongestTime, 10);
+      if (!Number.isNaN(parsedTime)) {
+        setLongestGenerationTime(parsedTime);
+      }
+    }
+
     // Handle OAuth callback
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get("code");
@@ -256,6 +268,32 @@ function TriviaMaker() {
     const loginUrlParams = new URLSearchParams(window.location.search);
     setShowLoginButton(loginUrlParams.has("login"));
   }, []);
+
+  // Track elapsed time while generating questions
+  useEffect(() => {
+    if (isGenerating) {
+      setGenerationElapsed(0);
+      if (generationTimerRef.current) {
+        clearInterval(generationTimerRef.current);
+      }
+      generationTimerRef.current = setInterval(() => {
+        setGenerationElapsed((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (generationTimerRef.current) {
+        clearInterval(generationTimerRef.current);
+        generationTimerRef.current = null;
+      }
+      setGenerationElapsed(0);
+    }
+
+    return () => {
+      if (generationTimerRef.current) {
+        clearInterval(generationTimerRef.current);
+        generationTimerRef.current = null;
+      }
+    };
+  }, [isGenerating]);
 
   async function handleOAuthCallback(code) {
     const codeVerifier = sessionStorage.getItem("openRouterCodeVerifier");
@@ -500,6 +538,7 @@ function TriviaMaker() {
       return;
     }
 
+    generationStartRef.current = Date.now();
     setIsGenerating(true);
     setGeneratedQuestions([]);
 
@@ -768,8 +807,6 @@ You may be given feedback on questions that were rejected, as well as a list of 
         console.error("Failed to parse structured response:", parseError);
         console.error("Raw content:", content);
         alert("Failed to parse AI response. Please try again.");
-        console.groupEnd();
-        setIsGenerating(false);
         return;
       }
 
@@ -779,6 +816,26 @@ You may be given feedback on questions that were rejected, as well as a list of 
       console.groupEnd();
       alert(`Failed to generate questions: ${error.message}`);
     } finally {
+      if (generationStartRef.current) {
+        const totalSeconds = Math.max(
+          0,
+          Math.round((Date.now() - generationStartRef.current) / 1000)
+        );
+        generationStartRef.current = null;
+
+        if (totalSeconds > 0) {
+          setLongestGenerationTime((prev) => {
+            if (totalSeconds > prev) {
+              localStorage.setItem(
+                "longestGenerationTime",
+                String(totalSeconds)
+              );
+              return totalSeconds;
+            }
+            return prev;
+          });
+        }
+      }
       console.groupEnd();
       setIsGenerating(false);
     }
@@ -1868,7 +1925,11 @@ You may be given feedback on questions that were rejected, as well as a list of 
                     }}
                   >
                     {isGenerating
-                      ? "⏳ GENERATING..."
+                      ? `⏳ GENERATING... (${generationElapsed}s${
+                          longestGenerationTime > 0
+                            ? `/${longestGenerationTime}s`
+                            : ""
+                        })`
                       : "✨ GENERATE QUESTIONS"}
                   </button>
                   {(
@@ -1913,7 +1974,7 @@ You may be given feedback on questions that were rejected, as well as a list of 
                       textTransform: "uppercase",
                     }}
                   >
-                    REMOVE
+                    REMOVE KEY
                   </button>
                 </div>
 
