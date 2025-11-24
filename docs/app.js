@@ -1926,7 +1926,7 @@ Question generation advice:
                               textTransform: "uppercase",
                             }}
                           >
-                            ⬇ EASIER
+                            TOO EASY
                           </button>
                           <button
                             onClick={() =>
@@ -1947,7 +1947,7 @@ Question generation advice:
                               textTransform: "uppercase",
                             }}
                           >
-                            ⬆ HARDER
+                            TOO HARD
                           </button>
                           <button
                             onClick={() =>
