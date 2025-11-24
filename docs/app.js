@@ -400,6 +400,7 @@ function TriviaMaker() {
       setNewQuestion(card.question);
       setNewAnswer(card.answer);
       setNewCategory(card.category || "");
+      setActiveTab("manual"); // Ensure we're on the manual tab to show the form
     }
   }
 
@@ -1644,8 +1645,8 @@ You may be given feedback on questions that were rejected, as well as a list of 
               </div>
             )}
 
-            {/* Manual Tab */}
-            {activeTab === "manual" && (
+            {/* Manual Tab or Edit Mode */}
+            {(activeTab === "manual" || editingId) && (
               <div className="space-y-4">
                 <div>
                   <label

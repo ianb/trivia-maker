@@ -22,10 +22,12 @@ I made this for some family fun, and I hope you might have your own fun with it 
 There's no build process! The page is in `docs/` for use with GitHub Pages.
 
 To run locally:
+
 1. Serve the `docs/` directory with any HTTP server
 2. Open the page in your browser
 
 For example:
+
 ```bash
 cd docs
 python -m http.server 8000
@@ -45,11 +47,13 @@ OpenRouter is a service that provides access to AI models through a single API. 
 1. **Connect Your Account**: Click "CONNECT OPENROUTER" to authenticate with OpenRouter using OAuth. This is a secure way to connect without sharing your API key directly.
 
 2. **Generate Questions**: Once connected, you can:
+
    - Enter a category for your questions
    - Provide additional instructions or feedback
    - Click "GENERATE" to create new trivia questions
 
 3. **AI Learning**: The AI will:
+
    - See all your existing questions in the category
    - Learn from your feedback (marking questions as "too easy", "too hard", or "format" issues)
    - Use your feedback to generate better questions over time
