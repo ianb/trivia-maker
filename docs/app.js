@@ -1,5 +1,123 @@
 const { useState, useEffect } = React;
 
+function AuthForm({ onSignIn, onSignUp, error }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (isSignUp) {
+      onSignUp(username, password);
+    } else {
+      onSignIn(username, password);
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setIsSignUp(false)}
+          className="flex-1 px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+          style={{
+            background: !isSignUp ? "#4CAF50" : "#9E9E9E",
+            color: "#FFF",
+            border: "3px solid #2D5016",
+            boxShadow: "3px 3px 0px #1A3009",
+            fontFamily: "monospace",
+            fontSize: "12px",
+            textTransform: "uppercase",
+          }}
+        >
+          Sign In
+        </button>
+        <button
+          onClick={() => setIsSignUp(true)}
+          className="flex-1 px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+          style={{
+            background: isSignUp ? "#4CAF50" : "#9E9E9E",
+            color: "#FFF",
+            border: "3px solid #2D5016",
+            boxShadow: "3px 3px 0px #1A3009",
+            fontFamily: "monospace",
+            fontSize: "12px",
+            textTransform: "uppercase",
+          }}
+        >
+          Sign Up
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Username"
+            required
+            className="w-full px-4 py-3 font-bold pixel-button"
+            style={{
+              background: "#FFF",
+              border: "3px solid #2D5016",
+              boxShadow: "3px 3px 0px #1A3009",
+              fontFamily: "monospace",
+              fontSize: "14px",
+            }}
+          />
+        </div>
+        <div className="mb-4">
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            required
+            className="w-full px-4 py-3 font-bold pixel-button"
+            style={{
+              background: "#FFF",
+              border: "3px solid #2D5016",
+              boxShadow: "3px 3px 0px #1A3009",
+              fontFamily: "monospace",
+              fontSize: "14px",
+            }}
+          />
+        </div>
+        {error && (
+          <div
+            className="mb-4 p-3 text-center"
+            style={{
+              background: "#FFEBEE",
+              border: "3px solid #F44336",
+              color: "#C62828",
+              fontFamily: "monospace",
+              fontSize: "12px",
+            }}
+          >
+            {error}
+          </div>
+        )}
+        <button
+          type="submit"
+          className="w-full px-4 py-3 font-bold pixel-button transition-all active:scale-95"
+          style={{
+            background: "#4CAF50",
+            color: "#FFF",
+            border: "3px solid #2D5016",
+            boxShadow: "3px 3px 0px #1A3009",
+            fontFamily: "monospace",
+            fontSize: "14px",
+            textTransform: "uppercase",
+          }}
+        >
+          {isSignUp ? "Create Account" : "Sign In"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function TriviaMaker() {
   const [cards, setCards] = useState([]);
   const [editingId, setEditingId] = useState(null);
@@ -25,6 +143,11 @@ function TriviaMaker() {
   const [viewMode, setViewMode] = useState("grid"); // "grid" or "table"
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showAnswersInTable, setShowAnswersInTable] = useState(false);
+  const [user, setUser] = useState(null);
+  const [authError, setAuthError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [showLoginButton, setShowLoginButton] = useState(false);
 
   // Helper function to count words in text (strips markdown/html)
   function countWords(text) {
@@ -111,6 +234,27 @@ function TriviaMaker() {
       // Clean up URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
+
+    // Initialize Userbase
+    if (typeof userbase !== "undefined") {
+      userbase
+        .init({ appId: "d46aee59-92c9-4796-9253-c8e7dc1d3ee0" })
+        .then((session) => {
+          if (session.user) {
+            setUser(session.user);
+          }
+          setIsLoading(false);
+        })
+        .catch(() => {
+          setIsLoading(false);
+        });
+    } else {
+      setIsLoading(false);
+    }
+
+    // Check for ?login query parameter
+    const loginUrlParams = new URLSearchParams(window.location.search);
+    setShowLoginButton(loginUrlParams.has("login"));
   }, []);
 
   async function handleOAuthCallback(code) {
@@ -645,6 +789,55 @@ function TriviaMaker() {
     setShowFullScreenAnswer(false);
   }
 
+  function handleSignUp(username, password) {
+    if (typeof userbase === "undefined") {
+      setAuthError("Userbase SDK not loaded");
+      return;
+    }
+    userbase
+      .signUp({ username, password, rememberMe: "local" })
+      .then((user) => {
+        setUser(user);
+        setAuthError("");
+        setShowAuthDialog(false);
+      })
+      .catch((error) => {
+        setAuthError(error.message || "Sign up failed");
+      });
+  }
+
+  function handleSignIn(username, password) {
+    if (typeof userbase === "undefined") {
+      setAuthError("Userbase SDK not loaded");
+      return;
+    }
+    userbase
+      .signIn({ username, password, rememberMe: "local" })
+      .then((user) => {
+        setUser(user);
+        setAuthError("");
+        setShowAuthDialog(false);
+      })
+      .catch((error) => {
+        setAuthError(error.message || "Sign in failed");
+      });
+  }
+
+  function handleSignOut() {
+    if (typeof userbase === "undefined") {
+      return;
+    }
+    userbase
+      .signOut()
+      .then(() => {
+        setUser(null);
+        setAuthError("");
+      })
+      .catch((error) => {
+        setAuthError(error.message || "Sign out failed");
+      });
+  }
+
   function handleToggleCardSelection(cardId) {
     setSelectedCards((prev) => {
       const next = new Set(prev);
@@ -691,9 +884,142 @@ function TriviaMaker() {
     )
     .sort();
 
+  // Show loading screen while initializing
+  if (isLoading) {
+    return (
+      <div
+        className="fixed inset-0 flex items-center justify-center"
+        style={{
+          background: "#A8D5BA",
+          backgroundImage: `repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 0, 0, 0.03) 2px,
+            rgba(0, 0, 0, 0.03) 4px
+          ),
+          repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 0, 0, 0.03) 2px,
+            rgba(0, 0, 0, 0.03) 4px
+          )`,
+        }}
+      >
+        <div
+          className="pixel-card p-8 text-center"
+          style={{
+            background: "#FFF9C4",
+            border: "6px solid #2D5016",
+            boxShadow: "12px 12px 0px #1A3009",
+          }}
+        >
+          <h1
+            className="text-3xl font-bold mb-4 pixel-font"
+            style={{
+              color: "#2D5016",
+              textShadow: "2px 2px 0px #1A3009",
+            }}
+          >
+            Loading...
+          </h1>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <React.Fragment>
       <div className="no-print">
+        {showAuthDialog && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-8"
+            style={{
+              background: "rgba(0, 0, 0, 0.5)",
+            }}
+            onClick={() => {
+              setShowAuthDialog(false);
+              setAuthError("");
+            }}
+          >
+            <div
+              className="pixel-card p-8 max-w-md w-full"
+              style={{
+                background: "#FFF9C4",
+                border: "6px solid #2D5016",
+                boxShadow: "12px 12px 0px #1A3009",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2
+                className="text-2xl font-bold mb-6 pixel-font text-center"
+                style={{
+                  color: "#2D5016",
+                  textShadow: "2px 2px 0px #1A3009",
+                }}
+              >
+                {user ? "LOGGED IN" : "LOGIN / SIGN UP"}
+              </h2>
+              {user ? (
+                <div className="text-center">
+                  <p
+                    style={{
+                      color: "#1A3009",
+                      fontFamily: "monospace",
+                      fontSize: "14px",
+                      marginBottom: "16px",
+                    }}
+                  >
+                    Logged in as: <strong>{user.username}</strong>
+                  </p>
+                  <button
+                    onClick={handleSignOut}
+                    className="px-6 py-3 font-bold pixel-button transition-all active:scale-95"
+                    style={{
+                      background: "#F44336",
+                      color: "#FFF",
+                      border: "4px solid #2D5016",
+                      boxShadow: "4px 4px 0px #1A3009",
+                      fontFamily: "monospace",
+                      fontSize: "14px",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    LOGOUT
+                  </button>
+                </div>
+              ) : (
+                <AuthForm
+                  onSignIn={handleSignIn}
+                  onSignUp={handleSignUp}
+                  error={authError}
+                />
+              )}
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={() => {
+                    setShowAuthDialog(false);
+                    setAuthError("");
+                  }}
+                  className="px-6 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+                  style={{
+                    background: "#9E9E9E",
+                    color: "#FFF",
+                    border: "3px solid #2D5016",
+                    boxShadow: "3px 3px 0px #1A3009",
+                    fontFamily: "monospace",
+                    fontSize: "12px",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  CLOSE
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showAboutDialog && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center p-8"
@@ -1029,21 +1355,58 @@ function TriviaMaker() {
 
         <div className="container mx-auto px-4 py-8 max-w-6xl relative">
           <header className="mb-8 text-center relative">
-            <button
-              onClick={() => setShowAboutDialog(true)}
-              className="absolute top-0 right-0 px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
-              style={{
-                background: "#9E9E9E",
-                color: "#FFF",
-                border: "3px solid #2D5016",
-                boxShadow: "3px 3px 0px #1A3009",
-                fontFamily: "monospace",
-                fontSize: "12px",
-                textTransform: "uppercase",
-              }}
-            >
-              ABOUT
-            </button>
+            <div className="absolute top-0 right-0 flex gap-2">
+              <button
+                onClick={() => setShowAboutDialog(true)}
+                className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+                style={{
+                  background: "#9E9E9E",
+                  color: "#FFF",
+                  border: "3px solid #2D5016",
+                  boxShadow: "3px 3px 0px #1A3009",
+                  fontFamily: "monospace",
+                  fontSize: "12px",
+                  textTransform: "uppercase",
+                }}
+              >
+                ABOUT
+              </button>
+              {user ? (
+                <button
+                  onClick={handleSignOut}
+                  className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+                  style={{
+                    background: "#F44336",
+                    color: "#FFF",
+                    border: "3px solid #2D5016",
+                    boxShadow: "3px 3px 0px #1A3009",
+                    fontFamily: "monospace",
+                    fontSize: "12px",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  LOGOUT
+                </button>
+              ) : (
+                showLoginButton && (
+                  <button
+                    onClick={() => setShowAuthDialog(true)}
+                    className="px-4 py-2 font-bold pixel-button transition-all active:scale-95 text-sm"
+                    style={{
+                      background: "#4CAF50",
+                      color: "#FFF",
+                      border: "3px solid #2D5016",
+                      boxShadow: "3px 3px 0px #1A3009",
+                      fontFamily: "monospace",
+                      fontSize: "12px",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    LOGIN
+                  </button>
+                )
+              )}
+            </div>
             <h1
               className="text-6xl font-bold mb-3 pixel-font"
               style={{
