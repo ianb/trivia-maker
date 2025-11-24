@@ -69,3 +69,7 @@ OpenRouter is a service that provides access to AI models through a single API. 
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
+
+## Credits
+
+- Notification sound: [ding.wav](https://freesound.org/people/tim.kahn/sounds/91926/) by tim.kahn, used under [CC Attribution 4.0](https://creativecommons.org/licenses/by/4.0/)

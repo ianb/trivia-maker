@@ -811,6 +811,15 @@ You may be given feedback on questions that were rejected, as well as a list of 
       }
 
       setGeneratedQuestions(questions);
+
+      // Play sound if tab is in background
+      if (document.hidden) {
+        const audio = new Audio("assets/ding.wav");
+        audio.play().catch((err) => {
+          // Ignore errors (e.g., user hasn't interacted with page)
+          console.log("Could not play notification sound:", err);
+        });
+      }
     } catch (error) {
       console.error("Error generating questions:", error);
       console.groupEnd();
