@@ -511,7 +511,7 @@ function TriviaMaker() {
           (aiCategory.trim() || "Uncategorized")
       );
       const existingQuestionsText = categoryCards
-        .map((card) => `${card.question}: ${card.answer}`)
+        .map((card) => `Q: ${card.question}  A: ${card.answer}`)
         .join("\n");
 
       // Get rejected questions for this category
@@ -525,8 +525,8 @@ function TriviaMaker() {
       const tooHardRejected = categoryRejected.filter(
         (r) => r.annotation === "too-hard"
       );
-      const formatRejected = categoryRejected.filter(
-        (r) => r.annotation === "format"
+      const otherRejected = categoryRejected.filter(
+        (r) => r.annotation === "other" || r.annotation === "format"
       );
 
       let rejectedText = "";
@@ -535,12 +535,12 @@ function TriviaMaker() {
         const tooEasyText = tooEasyRejected
           .map(
             (rejected) =>
-              `<feedback user-feedback="${(rejected.userFeedback || "").replace(
+              `<too-easy user-feedback="${(rejected.userFeedback || "").replace(
                 /"/g,
                 "&quot;"
-              )}">${rejected.question}: ${rejected.answer}</feedback>`
+              )}">Q: ${rejected.question}  A: ${rejected.answer}</too-easy>`
           )
-          .join("\n\n");
+          .join("\n");
         rejectedText += `Questions marked as too easy:\n${tooEasyText}\n\n`;
       }
 
@@ -548,37 +548,39 @@ function TriviaMaker() {
         const tooHardText = tooHardRejected
           .map(
             (rejected) =>
-              `<feedback user-feedback="${(rejected.userFeedback || "").replace(
+              `<too-hard user-feedback="${(rejected.userFeedback || "").replace(
                 /"/g,
                 "&quot;"
-              )}">${rejected.question}: ${rejected.answer}</feedback>`
+              )}">Q: ${rejected.question}  A: ${rejected.answer}</too-hard>`
           )
-          .join("\n\n");
+          .join("\n");
         rejectedText += `Questions marked as too hard:\n${tooHardText}\n\n`;
       }
 
-      if (formatRejected.length > 0) {
-        const formatText = formatRejected
-          .map(
-            (rejected) =>
-              `<feedback user-feedback="${(rejected.userFeedback || "").replace(
-                /"/g,
-                "&quot;"
-              )}">${rejected.question}: ${rejected.answer}</feedback>`
+      if (otherRejected.length > 0) {
+        const otherText = otherRejected
+          .map((rejected) =>
+            (rejected.userFeedback || "").trim()
+              ? `<rejected-with-feedback user-feedback="${(
+                  rejected.userFeedback || ""
+                ).replace(/"/g, "&quot;")}">Q: ${rejected.question}  A: ${
+                  rejected.answer
+                }</rejected-with-feedback>`
+              : `<rejected-without-feedback>Q: ${rejected.question}  A: ${rejected.answer}</rejected-without-feedback>`
           )
-          .join("\n\n");
-        rejectedText += `Questions with format issues:\n${formatText}\n\n`;
+          .join("\n");
+        rejectedText += `Questions with other issues:\n${otherText}\n\n`;
       }
 
       // Build the prompt
-      let prompt = `<category>\n${aiCategory}\n</category>\n\nGenerate 5 trivia questions about this category.\n\n`;
+      let prompt = `Generate questions for the category: <category>${aiCategory}</category>\n\nGenerate 5 trivia questions about this category.\n\n`;
 
       if (existingQuestionsText) {
-        prompt += `Here are the existing questions in this category (try to make new kinds of questions different than these):\n${existingQuestionsText}\n\n`;
+        prompt += `Here are accepted questions in this category (these are good examples, but questions shouldn't duplicate any of these):\n<accepted-questions>\n${existingQuestionsText}\n</accepted-questions>\n\n`;
       }
 
       if (rejectedText) {
-        prompt += `Here are some questions that were rejected with feedback:\n${rejectedText}`;
+        prompt += `Here are some questions that were rejected with feedback:\n<rejected-questions>\n${rejectedText}\n</rejected-questions>\n\n`;
         prompt += `You may generate a similar question to those that were rejected, so long as you incorporate the feedback.\n\n`;
       }
 
@@ -609,8 +611,23 @@ function TriviaMaker() {
                         type: "string",
                         description: "The answer to the trivia question",
                       },
+                      answerInQuestion: {
+                        type: "boolean",
+                        description:
+                          "Does the answer appear in part in the question? For example: does the question contain one of the words from the answer, a different form of the word, or something else that gives away the answer?",
+                      },
+                      alternateQuestion: {
+                        type: "string",
+                        description:
+                          "IF answerInQuestion is true, then compose an alternate version of the question that does not give away the answer.",
+                      },
                     },
-                    required: ["question", "answer"],
+                    required: [
+                      "question",
+                      "answer",
+                      "answerInQuestion",
+                      "alternateQuestion",
+                    ],
                     additionalProperties: false,
                   },
                 },
@@ -626,6 +643,8 @@ function TriviaMaker() {
             content: `
 You are a trivia question generator. You are making questions with compact questions and a canonical answer. Answers should be short and clear (though you may include an explanation in parenthesis if there are multiple possible answers)
 
+# GENERATING
+
 Questions and answers may include Markdown formatting and emoji, but make them easy to read out loud.
 
 Question generation advice:
@@ -633,6 +652,14 @@ Question generation advice:
 2. Unlike category, contestants will NOT know any additional-user-instructions
 3. It should be clear early in the question what kind of answer you expect (e.g., when talking about music you should indicate if the expected answer is a song, artist, album, etc.)
 4. Avoid answers that appear in other questions, such as asking "What notable landmark is in Paris" and then asking "What is the capital of France?"
+
+# LEARNING
+
+You may be given feedback on questions that were rejected, as well as a list of accepted questions. Think about these things:
+
+1. Given any questions marked too hard or too easy, theorize on the difficulty levels that are within range. Accepted questions also demonstrate acceptable difficulty levels.
+2. Given any questions that were rejected-without-feedback, theorize on what would make them boring or uninteresting (so you can avoid this in future questions).
+3. Given any questions that were rejected-with-feedback, use that feedback to rephrase the question (unless you see a rephrased question in the accepted questions). Consider the how to generalize the feedback to aid question generation.
 `.trim(),
           },
           {
@@ -641,13 +668,19 @@ Question generation advice:
           },
         ],
         reasoning: {
-          effort: "high",
-          exclude: true,
+          effort: "medium",
+          exclude: false,
           enabled: true,
         },
       };
 
-      console.log("LLM User Message:", prompt);
+      console.group("LLM Request");
+      console.log(
+        "%csystem:",
+        "color: #9C27B0; font-weight: bold",
+        requestBody.messages[0].content
+      );
+      console.log("%cuser:", "color: #2196F3; font-weight: bold", prompt);
 
       const response = await fetch(
         "https://openrouter.ai/api/v1/chat/completions",
@@ -669,28 +702,73 @@ Question generation advice:
       const data = await response.json();
       const content = data.choices[0].message.content.trim();
 
+      console.log(
+        "%cLLM Full Response:",
+        "color: #2196F3; font-weight: bold",
+        data
+      );
+
       // Parse the structured JSON response
       let questions = [];
       try {
         const parsed = JSON.parse(content);
         console.log(
-          "LLM Structured Response:",
-          JSON.stringify(parsed, null, 2)
+          "%cLLM Structured Response:",
+          "color: #4CAF50; font-weight: bold",
+          parsed
         );
+        if (data.choices[0].message?.reasoning) {
+          console.log(
+            "%cLLM Reasoning:",
+            "color: #FF9800; font-weight: bold",
+            data.choices[0].message.reasoning
+          );
+        }
 
         // Extract questions from the structured response
+        let rawQuestions = [];
         if (parsed.questions && Array.isArray(parsed.questions)) {
-          questions = parsed.questions;
+          rawQuestions = parsed.questions;
         } else if (Array.isArray(parsed)) {
           // Fallback: if it's directly an array
-          questions = parsed;
+          rawQuestions = parsed;
         } else {
           throw new Error("Response does not contain a questions array");
         }
+
+        // Process questions: use alternateQuestion if answerInQuestion is true
+        questions = rawQuestions.map((item) => {
+          const finalQuestion =
+            item.answerInQuestion === true &&
+            item.alternateQuestion &&
+            item.alternateQuestion.trim()
+              ? item.alternateQuestion.trim()
+              : item.question;
+
+          // Log substitution if it happened
+          if (
+            item.answerInQuestion === true &&
+            item.alternateQuestion &&
+            item.alternateQuestion.trim()
+          ) {
+            console.log("Question substitution made:", {
+              original: item.question,
+              alternate: item.alternateQuestion,
+              answer: item.answer,
+            });
+          }
+
+          // Return only question and answer (final values)
+          return {
+            question: finalQuestion,
+            answer: item.answer,
+          };
+        });
       } catch (parseError) {
         console.error("Failed to parse structured response:", parseError);
         console.error("Raw content:", content);
         alert("Failed to parse AI response. Please try again.");
+        console.groupEnd();
         setIsGenerating(false);
         return;
       }
@@ -698,8 +776,10 @@ Question generation advice:
       setGeneratedQuestions(questions);
     } catch (error) {
       console.error("Error generating questions:", error);
+      console.groupEnd();
       alert(`Failed to generate questions: ${error.message}`);
     } finally {
+      console.groupEnd();
       setIsGenerating(false);
     }
   }
@@ -727,8 +807,8 @@ Question generation advice:
     const promptMessages = {
       "too-easy": "Why is this question too easy?",
       "too-hard": "Why is this question too hard?",
-      format:
-        "What format issue does this question have? (e.g., poor question length, ambiguous answer, answer revealed in question)",
+      other:
+        "What issue does this question have? (e.g., poor question length, ambiguous answer, answer revealed in question, boring, etc.)",
     };
 
     const userFeedback = window.prompt(
@@ -1149,7 +1229,7 @@ Question generation advice:
                       feedback
                     </li>
                     <li>
-                      Mark questions as "too easy", "too hard", or "format" to
+                      Mark questions as "too easy", "too hard", or "other" to
                       improve future generation
                     </li>
                     <li>
@@ -1956,7 +2036,7 @@ Question generation advice:
                                 item.question,
                                 item.answer,
                                 index,
-                                "format"
+                                "other"
                               )
                             }
                             className="flex-1 min-w-[80px] px-2 py-2 font-bold pixel-button text-xs"
@@ -1969,7 +2049,7 @@ Question generation advice:
                               textTransform: "uppercase",
                             }}
                           >
-                            📝 FORMAT
+                            👎 OTHER
                           </button>
                           <button
                             onClick={() =>

@@ -26,10 +26,12 @@
       fetch("app.js")
         .then((response) => response.text())
         .then((code) => {
-          const transformed = Babel.transform(code, {
+          const result = Babel.transform(code, {
             presets: ["react"],
-          }).code;
-          eval(transformed);
+            sourceMaps: "inline",
+            filename: "app.js",
+          });
+          eval(result.code);
         })
         .catch((err) => console.error("Error loading app.js:", err));
     </script>
