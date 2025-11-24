@@ -632,6 +632,7 @@ Question generation advice:
 1. The contestants will know the category, so the category cannot be the answer to the question
 2. Unlike category, contestants will NOT know any additional-user-instructions
 3. It should be clear early in the question what kind of answer you expect (e.g., when talking about music you should indicate if the expected answer is a song, artist, album, etc.)
+4. Avoid answers that appear in other questions, such as asking "What notable landmark is in Paris" and then asking "What is the capital of France?"
 `.trim(),
           },
           {
